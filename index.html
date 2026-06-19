@@ -4,14 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Quest Compass</title>
 
-    <!--
-    Main stylesheet.
-
-    Keeps ALL visual styling out of the HTML.
-    -->
+    <!-- Styles stay in their own file so this file only handles layout. -->
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -20,20 +15,12 @@
     <div class="container">
 
         <h1>🧭 Quest Compass</h1>
-        <p class="version">v0.3</p>
+        <p class="version">Version 0.3 — Navigation</p>
 
-        <!--
-        GPS Card
-
-        Displays current GPS information.
-        -->
         <section class="card">
-
             <h2>GPS</h2>
 
-            <p id="status">
-                GPS inactive
-            </p>
+            <p id="status">GPS inactive</p>
 
             <div id="coords">
                 Waiting for GPS...
@@ -46,40 +33,43 @@
             <button id="saveButton">
                 Save Current Location
             </button>
-
         </section>
 
-        <!--
-        Saved Locations
+        <section class="card" id="navigationCard">
+            <h2>Current Target</h2>
 
-        Populated automatically from storage.js
-        -->
+            <div id="targetInfo">
+                No target selected.
+            </div>
+
+            <div id="directionArrow">
+                ↑
+            </div>
+
+            <div id="navigationInfo">
+                Choose a saved location to navigate.
+            </div>
+        </section>
+
         <section class="card">
-
             <h2>Saved Locations</h2>
 
-            <div id="savedLocations">
-
-            </div>
+            <div id="savedLocations"></div>
 
             <button id="clearButton" class="danger">
                 Clear All Saved Locations
             </button>
-
         </section>
 
     </div>
 
-    <!--
-    Storage system.
-
-    Handles saving and loading locations.
-    -->
+    <!-- Storage loads first because app.js depends on it. -->
     <script src="storage.js"></script>
 
-    <!--
-    Main application logic.
-    -->
+    <!-- Navigation loads before app.js because app.js uses the navigation math. -->
+    <script src="navigation.js"></script>
+
+    <!-- Main app behavior. -->
     <script src="app.js"></script>
 
 </body>
