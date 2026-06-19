@@ -8,96 +8,306 @@
 
     <title>Quest Compass</title>
 
-    <!-- HTML links to the main stylesheet. -->
     <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
 
-    <div class="container">
+    <div class="appShell">
 
-        <h1>🧭 Quest Compass</h1>
-        <p class="version">Version 0.4 — Compass + Camera Marker</p>
+        <header class="appHeader">
 
-        <section class="card">
-            <h2>GPS</h2>
+            <div class="titleRow">
+                <div class="appIcon">🧭</div>
 
-            <p id="status">GPS inactive</p>
+                <div>
+                    <h1>Quest Compass</h1>
+                    <p id="modeSubtitle" class="modeSubtitle">Trail Active</p>
+                </div>
 
-            <div id="coords">
-                Waiting for GPS...
+                <button id="settingsButton" class="iconButton" type="button">
+                    ⚙️
+                </button>
             </div>
 
-            <button id="gpsButton">
-                Enable GPS
+            <div class="statusGrid">
+
+                <div id="gpsChip" class="statusChip">
+                    <span class="chipIcon">📍</span>
+                    <span>
+                        <strong>GPS</strong>
+                        <small id="gpsChipText">Off</small>
+                    </span>
+                </div>
+
+                <div id="compassChip" class="statusChip">
+                    <span class="chipIcon">🧭</span>
+                    <span>
+                        <strong>Compass</strong>
+                        <small id="compassChipText">Off</small>
+                    </span>
+                </div>
+
+                <div id="scannerChip" class="statusChip">
+                    <span class="chipIcon">🔺</span>
+                    <span>
+                        <strong>Scanner</strong>
+                        <small id="scannerChipText">Off</small>
+                    </span>
+                </div>
+
+                <div id="targetChip" class="statusChip">
+                    <span class="chipIcon">🎯</span>
+                    <span>
+                        <strong>Target</strong>
+                        <small id="targetChipText">None</small>
+                    </span>
+                </div>
+
+            </div>
+
+        </header>
+
+        <main>
+
+            <section id="trailPanel" class="modePanel activePanel">
+
+                <div class="compassCard">
+
+                    <div class="compassDial">
+
+                        <div class="cardinal north">N</div>
+                        <div class="cardinal east">E</div>
+                        <div class="cardinal south">S</div>
+                        <div class="cardinal west">W</div>
+
+                        <div id="directionArrow" class="directionArrow">
+                            ▲
+                        </div>
+
+                        <div id="bearingReadout" class="bearingReadout">
+                            No target
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="targetCard">
+
+                    <div class="targetIcon">🌳</div>
+
+                    <div class="targetMain">
+                        <div class="sectionLabel">ACTIVE TARGET</div>
+                        <h2 id="trailTargetName">No Active Trail</h2>
+                        <p id="trailTargetHint">Choose a saved place from Library.</p>
+                    </div>
+
+                    <div class="targetStats">
+                        <small>Distance</small>
+                        <strong id="trailDistance">--</strong>
+                        <small id="trailAccuracy">Accuracy unknown</small>
+                    </div>
+
+                </div>
+
+                <div class="actionGrid">
+
+                    <button id="trailGpsButton" class="actionTile greenAction" type="button">
+                        <span>📍</span>
+                        <strong>Enable GPS</strong>
+                        <small>Get location fix</small>
+                    </button>
+
+                    <button id="trailCompassButton" class="actionTile blueAction" type="button">
+                        <span>🧭</span>
+                        <strong>Enable Compass</strong>
+                        <small>Calibrate heading</small>
+                    </button>
+
+                    <button id="trailScannerButton" class="actionTile purpleAction" type="button">
+                        <span>🔺</span>
+                        <strong>Open Scanner</strong>
+                        <small>Detect markers</small>
+                    </button>
+
+                    <button id="trailSaveButton" class="actionTile goldAction" type="button">
+                        <span>🔖</span>
+                        <strong>Save This Place</strong>
+                        <small>Bookmark location</small>
+                    </button>
+
+                </div>
+
+                <div class="readoutCard">
+                    <div id="gpsReadout">GPS inactive.</div>
+                    <div id="headingReadout">Compass inactive.</div>
+                    <div id="navigationReadout">No navigation target selected.</div>
+                </div>
+
+            </section>
+
+            <section id="scanPanel" class="modePanel">
+
+                <div class="scannerCard">
+
+                    <div class="scannerTop">
+                        <div>
+                            <div class="sectionLabel">SIGIL SCAN</div>
+                            <h2>Marker Lens</h2>
+                        </div>
+
+                        <button id="scanCameraButton" class="miniButton" type="button">
+                            Enable Camera
+                        </button>
+                    </div>
+
+                    <div class="cameraFrame">
+                        <div class="liveBadge">● LIVE</div>
+
+                        <video id="cameraVideo" autoplay playsinline muted></video>
+
+                        <canvas id="cameraCanvas"></canvas>
+                    </div>
+
+                    <div id="markerBanner" class="markerBanner">
+                        <div class="markerIcon">🔺</div>
+                        <div>
+                            <strong id="markerTitle">Scanner sleeping</strong>
+                            <p id="markerMessage">Enable camera to search for a red triangle marker.</p>
+                        </div>
+                    </div>
+
+                    <div class="signalGrid">
+
+                        <div class="signalItem">
+                            <span>Red Signal</span>
+                            <div class="barTrack">
+                                <div id="redSignalBar" class="barFill redFill"></div>
+                            </div>
+                            <strong id="redSignalText">0%</strong>
+                        </div>
+
+                        <div class="signalItem">
+                            <span>Shape Match</span>
+                            <div class="barTrack">
+                                <div id="shapeMatchBar" class="barFill blueFill"></div>
+                            </div>
+                            <strong id="shapeMatchText">0%</strong>
+                        </div>
+
+                        <div class="signalItem">
+                            <span>Lighting</span>
+                            <div class="barTrack">
+                                <div id="lightingBar" class="barFill goldFill"></div>
+                            </div>
+                            <strong id="lightingText">0%</strong>
+                        </div>
+
+                        <div class="signalItem">
+                            <span>Stability</span>
+                            <div class="barTrack">
+                                <div id="stabilityBar" class="barFill greenFill"></div>
+                            </div>
+                            <strong id="stabilityText">0%</strong>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="compactTargetCard">
+
+                    <div>
+                        <div class="sectionLabel">CURRENT TARGET</div>
+                        <h2 id="scanTargetName">No target selected</h2>
+                        <p id="scanTargetMeta">Choose a place from Library.</p>
+                    </div>
+
+                    <div class="miniCompass">
+                        ➤
+                    </div>
+
+                </div>
+
+            </section>
+
+            <section id="createPanel" class="modePanel">
+
+                <div class="createCard">
+
+                    <div class="sectionLabel">FORGE QUEST</div>
+
+                    <h2>Save Your Current Place</h2>
+
+                    <div class="mapPreview">
+                        <div class="mapPin">📍</div>
+                    </div>
+
+                    <label for="placeNameInput">Place Name</label>
+                    <input id="placeNameInput" type="text" placeholder="Example: Old Oak, Front Door, Hidden Gate">
+
+                    <label for="hintInput">Hint optional</label>
+                    <textarea id="hintInput" placeholder="Example: Look beneath the old oak."></textarea>
+
+                    <div id="createGpsReadout" class="fieldReadout">
+                        Enable GPS to capture this place.
+                    </div>
+
+                    <button id="createSaveButton" class="primaryButton" type="button">
+                        Save This Place
+                    </button>
+
+                    <button id="createSaveFollowButton" class="secondaryButton" type="button">
+                        Save + Follow
+                    </button>
+
+                </div>
+
+            </section>
+
+            <section id="libraryPanel" class="modePanel">
+
+                <div class="libraryHeader">
+                    <div>
+                        <div class="sectionLabel">FIELD NOTES</div>
+                        <h2>Saved Locations</h2>
+                    </div>
+
+                    <button id="clearButton" class="dangerMiniButton" type="button">
+                        Clear All
+                    </button>
+                </div>
+
+                <div id="savedLocations" class="savedList"></div>
+
+            </section>
+
+        </main>
+
+        <nav class="bottomNav">
+
+            <button class="navButton activeNav" data-mode="trail" type="button">
+                <span>⛰️</span>
+                Trail
             </button>
 
-            <button id="saveButton">
-                Save Current Location
-            </button>
-        </section>
-
-        <section class="card">
-            <h2>Compass</h2>
-
-            <p id="compassStatus">
-                Compass inactive.
-            </p>
-
-            <div id="headingInfo">
-                Phone heading: unknown
-            </div>
-
-            <button id="compassButton">
-                Enable Compass
-            </button>
-        </section>
-
-        <section class="card">
-            <h2>Current Target</h2>
-
-            <div id="targetInfo">
-                No target selected.
-            </div>
-
-            <div id="directionArrow">
-                ↑
-            </div>
-
-            <div id="navigationInfo">
-                Choose a saved location to navigate.
-            </div>
-        </section>
-
-        <section class="card">
-            <h2>Camera Marker</h2>
-
-            <p class="smallText">
-                Detects a red triangle marker using camera color, lighting correction, and shape confidence.
-            </p>
-
-            <button id="cameraButton">
-                Enable Camera Marker
+            <button class="navButton" data-mode="scan" type="button">
+                <span>◎</span>
+                Scan
             </button>
 
-            <video id="cameraVideo" autoplay playsinline muted></video>
-
-            <canvas id="cameraCanvas"></canvas>
-
-            <div id="markerStatus">
-                Camera marker detection inactive.
-            </div>
-        </section>
-
-        <section class="card">
-            <h2>Saved Locations</h2>
-
-            <div id="savedLocations"></div>
-
-            <button id="clearButton" class="danger">
-                Clear All Saved Locations
+            <button class="navButton" data-mode="create" type="button">
+                <span>✍️</span>
+                Create
             </button>
-        </section>
+
+            <button class="navButton" data-mode="library" type="button">
+                <span>📖</span>
+                Library
+            </button>
+
+        </nav>
 
     </div>
 
