@@ -1,471 +1,267 @@
-Quest Compass 🧭
+# Quest Compass
 
-Quest Compass is a mobile-first, location-based adventure guide app that turns real-world places into playable quests.
+Quest Compass is a mobile-first, location-based adventure app for turning real-world places into small playable quests.
 
-It is designed for:
+It combines three core tools:
 
-* Teachers
-* Parents
-* Museums
-* D&D groups
-* Geocachers
-* Parks
-* Classrooms
-* Birthday adventures
-* Story-driven walking tours
+- A GPS bookmark library for saving real places
+- A compass trail view for following saved places
+- A camera scanner for locking onto physical red triangle sigils
 
-The core idea is simple:
+The project is intentionally local-first and static. It runs on GitHub Pages with no backend, no accounts, no paid APIs, and no build step.
 
-Save real-world locations, guide players toward them, and unlock clues using GPS, compass direction, QR codes, symbols, or camera-detected markers.
-
-Quest Compass is not just a map app.
-It is a real-world adventure engine.
-
-⸻
-
-Live Prototype
+## Live Prototype
 
 https://ijustcreate.github.io/location-based-quest-guide-app/
 
-⸻
+## Current Version
 
-Current Version
+Version 0.5 - Milestone 1: Stabilization and Scanner Lock Flow
 
-Version 0.4 — Compass + Camera Marker Prototype
+This pass focuses on making the app usable as a mobile field tool before adding larger quest systems.
 
 Current prototype systems include:
 
-* GPS permission flow
-* Live GPS coordinate tracking
-* Save current location from the phone
-* Local saved location list
-* Delete saved locations
-* Navigate to saved locations
-* Distance calculation
-* Direction/bearing calculation
-* Directional arrow
-* Compass heading support
-* Phone-relative arrow correction
-* Camera marker section
-* Red triangle marker detection prototype
-* Lighting correction estimate for marker color detection
+- Mobile-safe layout with bottom navigation spacing
+- Safe-area-aware page padding for iPhone-style screens
+- Trail, Scan, Create, and Library tabs
+- Centralized app state labels to avoid contradictory UI states
+- GPS permission flow and live coordinate tracking
+- Compass heading support where the browser/device allows it
+- Saved place creation with name and optional hint
+- Local saved place persistence with `localStorage`
+- Library cards that hide raw coordinates by default
+- Begin Trail, Edit, Delete, and Clear All actions
+- In-app modal dialogs instead of native browser alerts
+- Red triangle camera scanner prototype
+- Scanner states: searching, signal found, holding steady, sigil locked
+- Stable hold requirement before scanner lock
+- Scanner metrics for Color Signal, Symbol Match, Light Quality, Frame Stability, and Lock Confidence
+- Basic PWA metadata and manifest for installable-app behavior
 
-⸻
+## Product Vision
 
-Current App Structure
+Quest Compass turns ordinary real-world places into quest points.
 
-The project is intentionally split into separate files so it does not become one massive index.html file.
-
-index.html
-
-Defines the page layout.
-
-Contains:
-
-* GPS section
-* Compass section
-* Current Target section
-* Camera Marker section
-* Saved Locations section
-* Script links
-
-styles.css
-
-Controls the visual design.
-
-Contains:
-
-* Dark mobile UI
-* Cards
-* Buttons
-* Saved location cards
-* Navigation arrow styling
-* Camera display styling
-* Marker status colors
-
-storage.js
-
-Handles saving and loading user data.
-
-Currently uses browser localStorage.
-
-This means saved locations are stored only on the current phone/browser.
-
-navigation.js
-
-Handles navigation math.
-
-Contains:
-
-* Distance calculation
-* Bearing calculation
-* Direction labels
-* Arrow rotation correction
-* Arrival detection
-
-camera.js
-
-Handles camera access and simple red triangle marker detection.
-
-The detector currently:
-
-* Opens the rear camera
-* Samples the camera frame
-* Estimates lighting color
-* Corrects color readings
-* Searches for red pixels
-* Estimates triangle-like shape confidence
-* Displays marker detection status
-
-app.js
-
-Controls the main app behavior.
-
-Contains:
-
-* Button wiring
-* GPS updates
-* Compass updates
-* Saved location rendering
-* Navigation target selection
-* Camera marker startup
-
-⸻
-
-Core Product Vision
-
-Quest Compass lets creators build location-based adventures without needing to manually type GPS coordinates.
-
-The ideal creator flow is:
+The intended loop is:
 
 1. Walk to a real-world place.
-2. Tap Save Current Location.
-3. Name the location.
-4. Add it to a quest.
-5. Generate a QR code or symbol marker.
-6. Place that marker in the world.
-7. Let players follow the quest.
+2. Save the location.
+3. Add a name and optional clue.
+4. Follow the saved place with GPS and compass direction.
+5. Scan a physical marker to confirm the exact discovery.
 
-The world becomes the level editor.
+GPS gets the player close. The marker confirms the moment of discovery.
 
-⸻
+## Current Tabs
 
-Intended Player Experience
+### Trail
 
-A player scans a QR code, finds a symbol, or opens a quest.
+Trail is the active navigation screen.
 
-The app guides them using one or more navigation styles:
+It shows:
 
-* GPS distance
-* Directional compass arrow
-* Walking directions
-* Sonar-style feedback
-* Attunement-style signal feedback
-* QR confirmation
-* Symbol confirmation
-* Camera marker detection
+- Current trail state
+- Compass dial and target bearing
+- Active target name and hint
+- Distance and GPS accuracy when GPS is active
+- Buttons for GPS, compass, scanner, and saving the current place
 
-The goal is to make navigation feel like discovery, not errands.
+Important state rule:
 
-⸻
+The app only says `Trail Active` when GPS is active and a target is selected. Otherwise it uses states such as `Trail Idle` or `Target Locked`.
 
-Navigation Modes
+### Scan
 
-Compass Mode
+Scan is the camera-based sigil detector.
 
-Points toward a saved target location using bearing calculations.
+It looks for a red triangle marker using lightweight browser camera analysis:
 
-Phone-Relative Compass Mode
+- `getUserMedia` opens the camera
+- frames are drawn to a canvas
+- red regions are detected
+- candidate marker boxes are scored
+- the app requires a stable hold before lock
 
-Uses the phone’s heading sensor so the arrow responds to the way the player is physically holding the phone.
+Scanner metrics:
 
-Map Mode
+- Color Signal
+- Symbol Match
+- Light Quality
+- Frame Stability
+- Lock Confidence
 
-Planned mode that opens Apple Maps or Google Maps walking directions.
+Lock flow:
 
-Sonar Mode
+1. Searching
+2. Signal Found
+3. Holding Steady
+4. Sigil Locked
 
-Planned mode where sound or vibration changes as the player gets closer.
+### Create
 
-Attunement Mode
+Create saves the user's current GPS location as a quest point.
 
-Planned mode where visual effects, glow, particles, or signal strength guide the player without giving exact directions.
+It supports:
 
-Marker Mode
+- Place name
+- Optional hint
+- GPS accuracy display
+- Save This Place
+- Save + Follow
 
-Uses QR codes, symbols, or camera-detected shapes to confirm a clue location.
+If GPS is not active, the app shows a styled `Location Needed` modal instead of a native alert.
 
-⸻
+### Library
 
-Marker System Vision
+Library is the saved place notebook.
 
-Quest markers should support multiple types.
+It supports:
 
-Reliable Markers
+- Saved place cards
+- Distance when GPS is active
+- Hidden technical coordinates by default
+- Show technical details toggle
+- Begin Trail
+- Edit placeholder modal
+- Delete confirmation
+- Clear All confirmation
 
-* QR codes
-* Short text codes
-* Manual symbol selection
+Raw latitude and longitude are hidden by default to keep screenshots cleaner and safer.
 
-Magical Markers
+## Project Structure
 
-* Painted symbols
-* Carved symbols
-* Stickers
-* Runes
-* Color shapes
-* Camera-detected glyphs
+This is a static vanilla HTML/CSS/JavaScript project.
 
-Future Marker Types
+- `index.html` - App shell, tab markup, PWA metadata, modal container
+- `styles.css` - Mobile UI, dark glass styling, safe-area layout, bottom nav, cards, scanner display
+- `app.js` - Main app state, UI rendering, GPS, compass, tabs, modals, library behavior
+- `camera.js` - Camera startup and red triangle scanner logic
+- `navigation.js` - Distance, bearing, direction labels, arrow rotation, arrival detection
+- `storage.js` - Local saved place persistence
+- `manifest.json` - PWA manifest
+- `icon.svg` - App icon for the manifest
+- `README.md` - Project notes
 
-* Black/white custom glyphs
-* AprilTag-style markers
-* Image recognition markers
-* Object/photo matching
-* Multi-symbol clue locks
+There is no package manager, build tool, server, or database required.
 
-The red triangle detector is the first prototype of this larger symbol-recognition system.
+## Local Storage
 
-⸻
+Saved places use this key:
 
-Why Camera Marker Detection Matters
+```text
+questCompass.savedPlaces.v1
+```
 
-QR codes are reliable, but they feel technological.
+Older saves from the prototype key are migrated from:
 
-Symbols feel like clues.
+```text
+questCompassLocations
+```
 
-A red triangle on paper, a spiral painted on a rock, or a rune carved into wood feels more like an adventure artifact.
+Saved places are local to the current browser/device.
 
-The long-term goal is:
+## Saved Place Shape
 
-GPS gets the player near the clue.
-The marker confirms the exact discovery.
+Saved places are normalized into a localStorage-friendly object:
 
-This solves the problem of GPS being too imprecise indoors, under trees, or near buildings.
+```json
+{
+  "id": "loc-...",
+  "name": "Old Oak",
+  "hint": "Look beneath the old oak.",
+  "latitude": 37.990211,
+  "longitude": -121.34857,
+  "accuracy": 10,
+  "category": "landmark",
+  "icon": "",
+  "sigil": null,
+  "createdAt": "2026-06-19T00:00:00.000Z",
+  "updatedAt": "2026-06-19T00:00:00.000Z"
+}
+```
 
-⸻
+## PWA Notes
 
-GPS Accuracy Notes
+The app includes:
 
-Phone GPS is not exact.
+- Mobile viewport with `viewport-fit=cover`
+- Theme color metadata
+- Apple mobile web app metadata
+- `manifest.json`
+- SVG app icon
 
-Expected accuracy:
+It is designed to continue working as a static GitHub Pages site.
 
-* Indoors: often 5–30 meters
-* Outdoors: often 2–10 meters
-* Under trees/buildings: may drift
-* Room-level indoor tracking: not reliable with GPS alone
+## Known Limitations
 
-Quest Compass should treat GPS as a “get close” system, not an exact location validator.
-
-Exact confirmation should come from:
-
-* QR codes
-* Symbols
-* Camera markers
-* Manual clue answers
-* Short codes
-* Photos
-
-⸻
-
-Current Limitations
-
-The current prototype is intentionally simple.
-
-Known limitations:
-
-* Saved data is only stored locally on one phone/browser
-* Camera marker detection is experimental
-* Red triangle detection may be affected by lighting, blur, distance, shadows, and marker size
-* Compass behavior can vary by browser and phone
-* Indoor GPS is not precise enough for couch-vs-kitchen navigation
-* No quest editor yet
-* No QR generation yet
-* No cloud sync yet
-* No user accounts yet
+- Camera marker detection is experimental
+- Red triangle detection can be affected by lighting, shadows, blur, distance, and marker size
+- Compass behavior varies by browser and phone
+- GPS is not precise enough for room-level indoor navigation
+- Saved data stays on one browser/device
+- No quest-chain editor yet
+- No QR generation yet
+- No cloud sync yet
+- No user accounts yet
 
 These are expected prototype limits.
 
-⸻
+## Near-Term Roadmap
 
-Near-Term Roadmap
+Next useful improvements:
 
-v0.5 — Improve Camera Marker Detection
+- Tune red triangle detection thresholds on real phones
+- Add scanner snapshot saving after lock
+- Add marker binding to a saved place
+- Add category/icon selection in Create
+- Add Library search and sorting
+- Add basic edit support for saved places
+- Add service worker caching if it stays safe for GitHub Pages
 
-Planned improvements:
+Not planned for this milestone:
 
-* Better lighting correction
-* Marker confidence tuning
-* Clearer visual feedback
-* “Too dark” / “move closer” / “hold steady” messages
-* Shape-specific detection modes
-* Triangle, circle, square, spiral prototypes
+- Multiplayer
+- Cloud sync
+- User accounts
+- Backend database
+- Paid APIs
+- Heavy AR frameworks
 
-v0.6 — QR Code Tools
+## Design Principles
 
-Planned features:
+- Mobile-first
+- Local-first
+- No account required
+- Save locations by standing there
+- GPS gets players close
+- Physical markers confirm exact discoveries
+- Important actions must stay reachable above the bottom nav
+- Green means truly active or ready
+- Amber means attention needed
+- Red means destructive or failed
+- Keep the app playful, practical, and readable
 
-* Generate QR codes
-* Save QR image
-* Share QR image
-* Print QR page
-* QR opens a specific clue or saved location
+## Development Notes
 
-v0.7 — Quest Creator
+Open `index.html` directly or serve the folder with any static file server.
 
-Planned features:
+Example:
 
-* Create quest
-* Add clue locations
-* Add hints
-* Add marker type
-* Reorder clue steps
-* Save quest locally
-* Play quest
+```powershell
+python -m http.server 5177
+```
 
-v0.8 — Quest Export / Import
+Then open:
 
-Planned features:
+```text
+http://127.0.0.1:5177
+```
 
-* Export quest as JSON
-* Import quest JSON
-* Share quests without accounts
-* Backup local quests
+For camera and GPS testing, use a secure context where possible. GitHub Pages uses HTTPS, which is suitable for mobile browser testing.
 
-v1.0 — Public Quest System
+## Summary
 
-Possible later features:
+Quest Compass is a prototype for turning real-world spaces into tiny adventure trails.
 
-* Creator accounts
-* Public quest library
-* Ratings
-* Teams
-* Multiplayer progress
-* Museum/teacher modes
-* Supabase or similar database backend
-
-⸻
-
-Design Principles
-
-* Mobile-first
-* No account required for players
-* Save locations by standing there
-* Do not require manual coordinate typing
-* GPS gets players close
-* Markers confirm exact discoveries
-* QR codes should contain IDs, not full quest data
-* The app should work for families before it tries to become a platform
-* Keep files modular
-* Keep the experience playful, practical, and readable
-
-⸻
-
-Example Use Cases
-
-Parent Adventure
-
-A parent creates a backyard treasure hunt.
-
-The child follows clues from:
-
-1. Front door
-2. Tree
-3. Garden rock
-4. Hidden treasure box
-
-Classroom Quest
-
-A teacher creates a campus science trail.
-
-Students find markers at:
-
-1. Tree
-2. Garden
-3. Weather station
-4. Class mural
-
-Museum Guide
-
-A museum creates an exhibit hunt.
-
-Visitors scan or identify symbols near exhibits to unlock story text.
-
-D&D Campaign
-
-A dungeon master creates a real-world rune hunt.
-
-Players follow GPS signals, identify symbols, and unlock story encounters.
-
-Geocaching Variant
-
-A creator builds a clue chain where each discovery points to the next physical marker.
-
-⸻
-
-Development Notes
-
-This project is currently a static website hosted with GitHub Pages.
-
-There is no build system.
-
-There is no backend.
-
-There is no package manager.
-
-That is intentional.
-
-The current goal is to keep the app easy to edit from a phone while proving the core interaction loop:
-
-Save location → Navigate to location → Confirm clue marker
-
-⸻
-
-Current File List
-
-* README.md
-* index.html
-* styles.css
-* storage.js
-* navigation.js
-* camera.js
-* app.js
-
-⸻
-
-Future File Ideas
-
-Potential future files:
-
-* quests.js
-* qr.js
-* symbols.js
-* markers.js
-* attunement.js
-* sonar.js
-* export.js
-* import.js
-* creator.js
-
-Each system should stay modular instead of being merged into one giant file.
-
-⸻
-
-Project Summary
-
-Quest Compass is a prototype for turning real-world spaces into playable adventures.
-
-A teacher could use it.
-
-A parent could use it.
-
-A museum could use it.
-
-A D&D group could use it.
-
-A geocacher could use it.
-
-The long-term goal is simple:
-
-Turn any real-world place into a quest.
+The current milestone stabilizes the mobile shell, clarifies app state, improves the scanner lock flow, and keeps saved places cleaner and safer to view.

@@ -6,19 +6,27 @@
 //
 // It opens the camera and looks for a red triangle.
 // It returns scanner data back to app.js so the UI can show:
-// - red signal
-// - shape match
-// - lighting
-// - stability
+// - color signal
+// - symbol match
+// - light quality
+// - frame stability
 // - confidence
 //
 // This detector is intentionally local.
-// No cloud. No database. No paid API goblin.
+// No cloud. No database. No paid API.
 
 let cameraStream = null;
 let cameraDetectionTimer = null;
 let stableMarkerFrames = 0;
 let lastBestBox = null;
+let stableHoldStartedAt = null;
+let smoothedResult = {
+    colorSignal: 0,
+    symbolMatch: 0,
+    lightQuality: 0,
+    frameStability: 0,
+    lockConfidence: 0
+};
 
 function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
     // Ask for the rear camera if possible.
@@ -27,11 +35,12 @@ function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
         onResult({
             title: "Camera unavailable",
             message: "This browser does not support camera access.",
-            redSignal: 0,
-            shapeMatch: 0,
-            lighting: 0,
-            stability: 0,
-            confidence: 0,
+            status: "error",
+            colorSignal: 0,
+            symbolMatch: 0,
+            lightQuality: 0,
+            frameStability: 0,
+            lockConfidence: 0,
             confirmed: false
         });
 
@@ -55,6 +64,18 @@ function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
 
         videoElement.play();
 
+        onResult({
+            title: "Searching for sigils...",
+            message: "Point your camera at a red marker.",
+            status: "searching",
+            colorSignal: 0,
+            symbolMatch: 0,
+            lightQuality: 0,
+            frameStability: 0,
+            lockConfidence: 0,
+            confirmed: false
+        });
+
         if (cameraDetectionTimer) {
             clearInterval(cameraDetectionTimer);
         }
@@ -71,11 +92,12 @@ function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
         onResult({
             title: "Camera error",
             message: error.message,
-            redSignal: 0,
-            shapeMatch: 0,
-            lighting: 0,
-            stability: 0,
-            confidence: 0,
+            status: "error",
+            colorSignal: 0,
+            symbolMatch: 0,
+            lightQuality: 0,
+            frameStability: 0,
+            lockConfidence: 0,
             confirmed: false
         });
     });
@@ -147,59 +169,90 @@ function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
     if (!best) {
         stableMarkerFrames = 0;
         lastBestBox = null;
+        stableHoldStartedAt = null;
 
-        onResult({
-            title: "Scanning",
-            message: "Searching for red triangle.",
-            redSignal: 0,
-            shapeMatch: 0,
-            lighting: lighting.quality,
-            stability: 0,
-            confidence: 0,
+        onResult(smoothScannerResult({
+            title: "Searching for sigils...",
+            message: "Point your camera at a red marker.",
+            status: "searching",
+            colorSignal: 0,
+            symbolMatch: 0,
+            lightQuality: lighting.quality,
+            frameStability: 0,
+            lockConfidence: 0,
             confirmed: false
-        });
+        }));
 
         return;
     }
 
     updateStability(best.box);
 
-    const stabilityScore = Math.min(
+    const frameStability = Math.min(
         100,
         stableMarkerFrames * 25
     );
 
-    const confidence = Math.round(
+    const lockConfidence = Math.round(
         best.redSignal * 0.25 +
         best.shapeMatch * 0.35 +
         best.hollowScore * 0.15 +
         lighting.quality * 0.1 +
-        stabilityScore * 0.15
+        frameStability * 0.15
     );
 
-    const confirmed =
-        confidence >= 76 &&
-        stableMarkerFrames >= 3;
+    const lockReady =
+        best.redSignal >= 70 &&
+        best.shapeMatch >= 55 &&
+        frameStability >= 80 &&
+        lighting.quality >= 25 &&
+        lockConfidence >= 76;
+
+    if (lockReady && stableHoldStartedAt === null) {
+        stableHoldStartedAt = Date.now();
+    }
+
+    if (!lockReady) {
+        stableHoldStartedAt = null;
+    }
+
+    const holdDuration = stableHoldStartedAt === null ? 0 : Date.now() - stableHoldStartedAt;
+    const confirmed = holdDuration >= 1250;
+    const status = confirmed ? "sigilLocked" : (lockReady ? "holdingSteady" : "signalFound");
+    const holdProgress = Math.min(100, Math.round(holdDuration / 1250 * 100));
 
     drawCandidateOverlay(
         context,
         best.box,
-        confidence,
+        lockConfidence,
         confirmed
     );
 
-    onResult({
-        title: confirmed ? "Marker confirmed" : "Hold steady",
+    onResult(smoothScannerResult({
+        title: confirmed ? "Sigil Locked" : (lockReady ? "Hold steady" : "Signal found"),
         message: confirmed ?
-            "Red triangle detected." :
+            "Marker confirmed." :
             "Red found. Center the triangle and hold still.",
-        redSignal: best.redSignal,
-        shapeMatch: best.shapeMatch,
-        lighting: lighting.quality,
-        stability: stabilityScore,
-        confidence: confidence,
+        status: status,
+        colorSignal: best.redSignal,
+        symbolMatch: best.shapeMatch,
+        lightQuality: lighting.quality,
+        frameStability: frameStability,
+        lockConfidence: lockConfidence,
+        holdProgress: holdProgress,
         confirmed: confirmed
+    }));
+}
+
+function smoothScannerResult(result) {
+    const weight = result.status === "searching" ? 0.35 : 0.45;
+
+    ["colorSignal", "symbolMatch", "lightQuality", "frameStability", "lockConfidence"].forEach(function(key) {
+        smoothedResult[key] = smoothedResult[key] * (1 - weight) + (result[key] || 0) * weight;
+        result[key] = Math.round(smoothedResult[key]);
     });
+
+    return result;
 }
 
 function estimateSceneLighting(data) {

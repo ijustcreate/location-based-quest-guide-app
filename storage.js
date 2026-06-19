@@ -13,7 +13,8 @@
 // Later this file can be swapped for a real database
 // without rewriting the whole app.
 
-const STORAGE_KEY = "questCompassLocations";
+const STORAGE_KEY = "questCompass.savedPlaces.v1";
+const LEGACY_STORAGE_KEY = "questCompassLocations";
 
 function createLocationId() {
     // Create a simple unique ID.
@@ -31,15 +32,19 @@ function normalizeLocation(location) {
         hint: location.hint || "",
         latitude: Number(location.latitude ?? location.lat),
         longitude: Number(location.longitude ?? location.lng),
-        accuracy: Number(location.accuracy ?? 0),
-        createdAt: location.createdAt || new Date().toISOString()
+        accuracy: Number(location.accuracy ?? location.accuracyMeters ?? 0),
+        category: location.category || "landmark",
+        icon: location.icon || "",
+        sigil: location.sigil || null,
+        createdAt: location.createdAt || new Date().toISOString(),
+        updatedAt: location.updatedAt || location.createdAt || new Date().toISOString()
     };
 }
 
 function loadLocations() {
     // Load saved locations from localStorage.
 
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
 
     if (!saved) {
         return [];
@@ -67,6 +72,8 @@ function saveLocations(locations) {
         STORAGE_KEY,
         JSON.stringify(locations)
     );
+
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
 }
 
 function addLocation(location) {

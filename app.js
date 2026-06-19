@@ -1,27 +1,37 @@
 // ==================================================
 // Quest Compass Main App
 // ==================================================
-//
-// This file controls:
-// - app modes
-// - GPS
-// - compass permission
-// - status chips
-// - navigation target
-// - create form
-// - saved location library
-// - scanner UI
 
-let currentLatitude = null;
-let currentLongitude = null;
-let currentAccuracy = null;
+const appState = {
+    activeTab: "trail",
+    gps: {
+        status: "off",
+        latitude: null,
+        longitude: null,
+        accuracyMeters: null,
+        error: null
+    },
+    compass: {
+        status: "off",
+        headingDegrees: null,
+        error: null
+    },
+    scanner: {
+        status: "off",
+        colorSignal: 0,
+        symbolMatch: 0,
+        lightQuality: 0,
+        frameStability: 0,
+        lockConfidence: 0,
+        lockedAt: null,
+        error: null
+    },
+    target: {
+        savedPlaceId: null
+    }
+};
 
-let phoneHeading = null;
 let activeTarget = null;
-
-let gpsActive = false;
-let compassActive = false;
-let scannerActive = false;
 
 const modeSubtitle = document.getElementById("modeSubtitle");
 
@@ -60,15 +70,22 @@ const cameraCanvas = document.getElementById("cameraCanvas");
 const markerTitle = document.getElementById("markerTitle");
 const markerMessage = document.getElementById("markerMessage");
 
-const redSignalBar = document.getElementById("redSignalBar");
-const shapeMatchBar = document.getElementById("shapeMatchBar");
-const lightingBar = document.getElementById("lightingBar");
-const stabilityBar = document.getElementById("stabilityBar");
+const colorSignalBar = document.getElementById("redSignalBar");
+const symbolMatchBar = document.getElementById("shapeMatchBar");
+const lightQualityBar = document.getElementById("lightingBar");
+const frameStabilityBar = document.getElementById("stabilityBar");
+const confidenceBar = document.getElementById("confidenceBar");
 
-const redSignalText = document.getElementById("redSignalText");
-const shapeMatchText = document.getElementById("shapeMatchText");
-const lightingText = document.getElementById("lightingText");
-const stabilityText = document.getElementById("stabilityText");
+const colorSignalText = document.getElementById("redSignalText");
+const symbolMatchText = document.getElementById("shapeMatchText");
+const lightQualityText = document.getElementById("lightingText");
+const frameStabilityText = document.getElementById("stabilityText");
+const confidenceText = document.getElementById("confidenceText");
+
+const modalOverlay = document.getElementById("modalOverlay");
+const modalTitle = document.getElementById("modalTitle");
+const modalMessage = document.getElementById("modalMessage");
+const modalActions = document.getElementById("modalActions");
 
 document.querySelectorAll(".navButton").forEach(function(button) {
     button.addEventListener("click", function() {
@@ -99,8 +116,14 @@ document.getElementById("createSaveFollowButton").addEventListener("click", func
 
 document.getElementById("clearButton").addEventListener("click", clearAllSavedLocations);
 
+modalOverlay.addEventListener("click", function(event) {
+    if (event.target === modalOverlay) {
+        hideModal();
+    }
+});
+
 function setMode(mode) {
-    // Switch between Trail, Scan, Create, and Library.
+    appState.activeTab = mode;
 
     document.querySelectorAll(".modePanel").forEach(function(panel) {
         panel.classList.remove("activePanel");
@@ -111,60 +134,45 @@ function setMode(mode) {
     });
 
     document.getElementById(mode + "Panel").classList.add("activePanel");
+    document.querySelector("[data-mode='" + mode + "']").classList.add("activeNav");
 
-    document
-        .querySelector("[data-mode='" + mode + "']")
-        .classList
-        .add("activeNav");
-
-    if (mode === "trail") {
-        modeSubtitle.textContent = "Trail Active";
-    }
-
-    if (mode === "scan") {
-        modeSubtitle.textContent = "Sigil Scan";
-    }
-
-    if (mode === "create") {
-        modeSubtitle.textContent = "Forge Quest";
-    }
+    document.body.classList.toggle("scanActive", mode === "scan" && appState.scanner.status !== "off");
 
     if (mode === "library") {
-        modeSubtitle.textContent = "Field Notes";
         renderLocations();
     }
+
+    renderAppState();
 }
 
 function enableGPS() {
-    // Start live GPS tracking.
-
     if (!navigator.geolocation) {
-        gpsReadout.textContent = "GPS is not supported on this device.";
+        appState.gps.status = "error";
+        appState.gps.error = "GPS is not supported on this device.";
+        renderAppState();
         return;
     }
 
-    gpsReadout.textContent = "Requesting GPS permission...";
+    appState.gps.status = "requesting";
+    appState.gps.error = null;
+    renderAppState();
 
     navigator.geolocation.watchPosition(
         function(position) {
-            currentLatitude = position.coords.latitude;
-            currentLongitude = position.coords.longitude;
-            currentAccuracy = position.coords.accuracy;
+            appState.gps.status = "active";
+            appState.gps.latitude = position.coords.latitude;
+            appState.gps.longitude = position.coords.longitude;
+            appState.gps.accuracyMeters = position.coords.accuracy;
+            appState.gps.error = null;
 
-            gpsActive = true;
-
-            updateStatusChips();
-            updateGpsReadouts();
-            updateNavigationDisplay();
+            renderAppState();
             renderLocations();
         },
-
         function(error) {
-            gpsReadout.textContent = "GPS Error: " + error.message;
-            gpsActive = false;
-            updateStatusChips();
+            appState.gps.status = "error";
+            appState.gps.error = error.message;
+            renderAppState();
         },
-
         {
             enableHighAccuracy: true,
             maximumAge: 0,
@@ -174,7 +182,8 @@ function enableGPS() {
 }
 
 function enableCompass() {
-    // iPhone Safari requires permission for orientation sensors.
+    appState.compass.status = "requesting";
+    renderAppState();
 
     if (
         typeof DeviceOrientationEvent !== "undefined" &&
@@ -185,11 +194,15 @@ function enableCompass() {
                 if (permissionState === "granted") {
                     startCompassListener();
                 } else {
-                    headingReadout.textContent = "Compass permission denied.";
+                    appState.compass.status = "error";
+                    appState.compass.error = "Compass permission denied.";
+                    renderAppState();
                 }
             })
             .catch(function(error) {
-                headingReadout.textContent = "Compass error: " + error.message;
+                appState.compass.status = "error";
+                appState.compass.error = error.message;
+                renderAppState();
             });
 
         return;
@@ -199,46 +212,30 @@ function enableCompass() {
 }
 
 function startCompassListener() {
-    // Listen for phone heading changes.
+    appState.compass.status = "calibrated";
+    appState.compass.error = null;
 
-    compassActive = true;
+    window.addEventListener("deviceorientation", handleDeviceOrientation, true);
 
-    updateStatusChips();
-
-    window.addEventListener(
-        "deviceorientation",
-        handleDeviceOrientation,
-        true
-    );
-
-    headingReadout.textContent = "Compass active. Rotate phone to update heading.";
+    renderAppState();
 }
 
 function handleDeviceOrientation(event) {
-    // iPhone gives webkitCompassHeading.
-    // Other devices may use alpha.
-
     if (typeof event.webkitCompassHeading === "number") {
-        phoneHeading = event.webkitCompassHeading;
+        appState.compass.headingDegrees = event.webkitCompassHeading;
     } else if (typeof event.alpha === "number") {
-        phoneHeading = normalizeDegrees(360 - event.alpha);
+        appState.compass.headingDegrees = normalizeDegrees(360 - event.alpha);
     } else {
-        headingReadout.textContent = "Phone heading unavailable.";
-        return;
+        appState.compass.status = "error";
+        appState.compass.error = "Phone heading unavailable.";
     }
 
-    headingReadout.textContent =
-        "Phone heading: " + Math.round(phoneHeading) + "°";
-
-    updateNavigationDisplay();
+    renderAppState();
 }
 
 function enableScanner() {
-    // Start camera marker scanner.
-
-    scannerActive = true;
-
-    updateStatusChips();
+    appState.scanner.status = "searching";
+    renderAppState();
 
     startCameraMarkerDetection(
         cameraVideo,
@@ -248,88 +245,186 @@ function enableScanner() {
 }
 
 function updateScannerUI(result) {
-    // Update scanner status and bars from camera.js result.
+    appState.scanner.status = result.status || (result.confirmed ? "sigilLocked" : "searching");
+    appState.scanner.colorSignal = result.colorSignal || 0;
+    appState.scanner.symbolMatch = result.symbolMatch || 0;
+    appState.scanner.lightQuality = result.lightQuality || 0;
+    appState.scanner.frameStability = result.frameStability || 0;
+    appState.scanner.lockConfidence = result.lockConfidence || 0;
+    appState.scanner.lockedAt = result.confirmed ? appState.scanner.lockedAt || new Date().toISOString() : null;
+    appState.scanner.error = result.status === "error" ? result.message : null;
 
     markerTitle.textContent = result.title;
-    markerMessage.textContent = result.message;
+    markerMessage.textContent = result.holdProgress && !result.confirmed ?
+        result.message + " Locking " + result.holdProgress + "%." :
+        result.message;
 
-    updateBar(redSignalBar, redSignalText, result.redSignal);
-    updateBar(shapeMatchBar, shapeMatchText, result.shapeMatch);
-    updateBar(lightingBar, lightingText, result.lighting);
-    updateBar(stabilityBar, stabilityText, result.stability);
+    updateBar(colorSignalBar, colorSignalText, appState.scanner.colorSignal);
+    updateBar(symbolMatchBar, symbolMatchText, appState.scanner.symbolMatch);
+    updateBar(lightQualityBar, lightQualityText, appState.scanner.lightQuality);
+    updateBar(frameStabilityBar, frameStabilityText, appState.scanner.frameStability);
+    updateBar(confidenceBar, confidenceText, appState.scanner.lockConfidence);
 
-    scannerChipText.textContent = result.confirmed ? "Confirmed" : "Active";
+    renderAppState();
 }
 
 function updateBar(barElement, textElement, value) {
-    // Update one scanner meter.
-
-    const safeValue = Math.max(
-        0,
-        Math.min(
-            100,
-            Math.round(value || 0)
-        )
-    );
+    const safeValue = Math.max(0, Math.min(100, Math.round(value || 0)));
 
     barElement.style.width = safeValue + "%";
     textElement.textContent = safeValue + "%";
 }
 
-function updateStatusChips() {
-    // Update compact top status pills.
-
-    gpsChip.classList.toggle("active", gpsActive);
-    compassChip.classList.toggle("active", compassActive);
-    scannerChip.classList.toggle("active", scannerActive);
-    targetChip.classList.toggle("active", activeTarget !== null);
-
-    gpsChipText.textContent = gpsActive ? "Active" : "Off";
-    compassChipText.textContent = compassActive ? "Calibrated" : "Off";
-    scannerChipText.textContent = scannerActive ? scannerChipText.textContent || "Active" : "Off";
-    targetChipText.textContent = activeTarget ? "Locked" : "None";
+function renderAppState() {
+    modeSubtitle.textContent = getHeaderSubtitle();
+    renderStatusChips();
+    renderGpsReadouts();
+    renderCompassReadout();
+    updateNavigationDisplay();
 }
 
-function updateGpsReadouts() {
-    // Display current GPS data in Trail and Create.
+function getHeaderSubtitle() {
+    if (appState.activeTab === "scan") {
+        if (appState.scanner.status === "sigilLocked") return "Sigil Locked";
+        if (appState.scanner.status === "signalFound") return "Signal Found";
+        if (appState.scanner.status === "holdingSteady") return "Hold Steady";
+        return "Sigil Scan";
+    }
 
-    if (!gpsActive) {
+    if (appState.activeTab === "create") return "Forge Quest";
+    if (appState.activeTab === "library") return "Field Notes";
+
+    if (!activeTarget) return "Trail Idle";
+    if (appState.gps.status !== "active") return "Target Locked";
+    return "Trail Active";
+}
+
+function renderStatusChips() {
+    const gpsActive = appState.gps.status === "active";
+    const compassReady = appState.compass.status === "calibrated";
+    const scannerReady = appState.scanner.status !== "off" && appState.scanner.status !== "error";
+    const hasTarget = activeTarget !== null;
+
+    gpsChip.classList.toggle("active", gpsActive);
+    compassChip.classList.toggle("active", compassReady);
+    scannerChip.classList.toggle("active", scannerReady);
+    targetChip.classList.toggle("active", hasTarget);
+
+    gpsChip.classList.toggle("warning", appState.gps.status === "requesting");
+    compassChip.classList.toggle("warning", appState.compass.status === "requesting");
+    scannerChip.classList.toggle("warning", appState.scanner.status === "signalFound" || appState.scanner.status === "holdingSteady");
+
+    gpsChipText.textContent = getGpsChipLabel();
+    compassChipText.textContent = getCompassChipLabel();
+    scannerChipText.textContent = getScannerChipLabel();
+    targetChipText.textContent = hasTarget ? "Locked" : "None";
+}
+
+function getGpsChipLabel() {
+    if (appState.gps.status === "requesting") return "Requesting";
+    if (appState.gps.status === "active") return "Active";
+    if (appState.gps.status === "error") return "Error";
+    return "Off";
+}
+
+function getCompassChipLabel() {
+    if (appState.compass.status === "requesting") return "Requesting";
+    if (appState.compass.status === "calibrated") return "Calibrated";
+    if (appState.compass.status === "error") return "Error";
+    return "Off";
+}
+
+function getScannerChipLabel() {
+    if (appState.scanner.status === "sigilLocked") return "Locked";
+    if (appState.scanner.status === "holdingSteady") return "Holding";
+    if (appState.scanner.status === "signalFound") return "Signal";
+    if (appState.scanner.status === "searching") return "Active";
+    if (appState.scanner.status === "error") return "Error";
+    return "Off";
+}
+
+function renderGpsReadouts() {
+    if (appState.gps.status === "error") {
+        gpsReadout.textContent = "GPS Error: " + appState.gps.error;
+        createGpsReadout.textContent = "GPS unavailable: " + appState.gps.error;
+        return;
+    }
+
+    if (appState.gps.status === "requesting") {
+        gpsReadout.textContent = "Requesting GPS permission...";
+        createGpsReadout.textContent = "Requesting GPS permission...";
+        return;
+    }
+
+    if (appState.gps.status !== "active") {
         gpsReadout.textContent = "GPS inactive.";
         createGpsReadout.textContent = "Enable GPS to capture this place.";
         return;
     }
 
     const text =
-        "Latitude: " + currentLatitude +
-        "<br>Longitude: " + currentLongitude +
-        "<br>Accuracy: " + Math.round(currentAccuracy) + " m";
+        "GPS Active<br>Accuracy: " + Math.round(appState.gps.accuracyMeters || 0) + " m";
 
     gpsReadout.innerHTML = text;
     createGpsReadout.innerHTML = text;
 }
 
-function savePlace(shouldFollow) {
-    // Save a location from the Create screen.
+function renderCompassReadout() {
+    if (appState.compass.status === "error") {
+        headingReadout.textContent = "Compass error: " + appState.compass.error;
+        return;
+    }
 
-    if (!currentLatitude || !currentLongitude) {
-        alert("Enable GPS first.");
+    if (appState.compass.status === "requesting") {
+        headingReadout.textContent = "Requesting compass permission...";
+        return;
+    }
+
+    if (appState.compass.status !== "calibrated") {
+        headingReadout.textContent = "Compass inactive. Calibrate heading when ready.";
+        return;
+    }
+
+    headingReadout.textContent =
+        appState.compass.headingDegrees === null ?
+            "Compass active. Rotate phone to update heading." :
+            "Phone heading: " + Math.round(appState.compass.headingDegrees) + " degrees";
+}
+
+function savePlace(shouldFollow) {
+    if (appState.gps.status !== "active" || appState.gps.latitude === null || appState.gps.longitude === null) {
+        showModal({
+            title: "Location Needed",
+            message: "Enable GPS before saving this place.",
+            actions: [
+                { label: "Enable GPS", className: "primaryButton", onClick: enableGPS },
+                { label: "Not now", className: "secondaryButton", onClick: hideModal }
+            ]
+        });
         return;
     }
 
     const name = placeNameInput.value.trim();
 
     if (!name) {
-        alert("Name this place first.");
+        showModal({
+            title: "Name Needed",
+            message: "Give this place a name before saving it.",
+            actions: [
+                { label: "OK", className: "primaryButton", onClick: hideModal }
+            ]
+        });
         return;
     }
 
     const newLocation = {
         name: name,
         hint: hintInput.value.trim(),
-        latitude: currentLatitude,
-        longitude: currentLongitude,
-        accuracy: currentAccuracy,
-        createdAt: new Date().toISOString()
+        latitude: appState.gps.latitude,
+        longitude: appState.gps.longitude,
+        accuracy: appState.gps.accuracyMeters,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     };
 
     addLocation(newLocation);
@@ -341,9 +436,7 @@ function savePlace(shouldFollow) {
 
     if (shouldFollow) {
         const locations = loadLocations();
-        activeTarget = locations[locations.length - 1];
-        updateStatusChips();
-        updateNavigationDisplay();
+        setActiveTarget(locations[locations.length - 1]);
         setMode("trail");
         return;
     }
@@ -352,10 +445,7 @@ function savePlace(shouldFollow) {
 }
 
 function renderLocations() {
-    // Render saved locations in Library.
-
     const container = document.getElementById("savedLocations");
-
     const locations = loadLocations();
 
     container.innerHTML = "";
@@ -369,57 +459,82 @@ function renderLocations() {
 
     locations.forEach(function(location) {
         const card = document.createElement("div");
+        const distanceText = getDistanceTextForLocation(location);
+        const savedMeta = "Saved nearby · Accuracy " + Math.round(location.accuracy || 0) + "m";
 
         card.className = "locationCard";
-
-        const distanceText = getDistanceTextForLocation(location);
-
         card.innerHTML =
-            "<h3>" + escapeHTML(location.name) + "</h3>" +
-            "<p>" +
-            "Lat: " + location.latitude + "<br>" +
-            "Lng: " + location.longitude + "<br>" +
-            "Saved Accuracy: " + Math.round(location.accuracy) + " m<br>" +
-            distanceText +
-            "</p>" +
+            "<div class='locationCardHeader'>" +
+            "<div><h3>" + escapeHTML(location.name) + "</h3>" +
+            "<p>" + escapeHTML(savedMeta) + "<br>" + escapeHTML(distanceText) + "</p></div>" +
+            "</div>" +
+            "<details class='technicalDetails'>" +
+            "<summary>Show technical details</summary>" +
+            "<p>Lat: " + escapeHTML(location.latitude) + "<br>Lng: " + escapeHTML(location.longitude) + "</p>" +
+            "</details>" +
             "<div class='locationActions'>" +
-            "<button class='followButton'>Follow</button>" +
+            "<button class='followButton'>Begin Trail</button>" +
+            "<button class='editButton'>Edit</button>" +
             "<button class='deleteButton'>Delete</button>" +
             "</div>";
 
         card.querySelector(".followButton").addEventListener("click", function() {
-            activeTarget = location;
-            updateStatusChips();
-            updateNavigationDisplay();
+            setActiveTarget(location);
             setMode("trail");
         });
 
+        card.querySelector(".editButton").addEventListener("click", function() {
+            showModal({
+                title: location.name,
+                message: location.hint || "No clue saved yet.",
+                actions: [
+                    { label: "Close", className: "primaryButton", onClick: hideModal }
+                ]
+            });
+        });
+
         card.querySelector(".deleteButton").addEventListener("click", function() {
-            deleteLocationById(location.id);
+            showModal({
+                title: "Delete Place",
+                message: "Remove " + location.name + " from Field Notes?",
+                actions: [
+                    {
+                        label: "Delete",
+                        className: "dangerButton",
+                        onClick: function() {
+                            deleteLocationById(location.id);
 
-            if (activeTarget && activeTarget.id === location.id) {
-                activeTarget = null;
-                updateNavigationDisplay();
-                updateStatusChips();
-            }
+                            if (activeTarget && activeTarget.id === location.id) {
+                                setActiveTarget(null);
+                            }
 
-            renderLocations();
+                            hideModal();
+                            renderLocations();
+                        }
+                    },
+                    { label: "Cancel", className: "secondaryButton", onClick: hideModal }
+                ]
+            });
         });
 
         container.appendChild(card);
     });
 }
 
-function getDistanceTextForLocation(location) {
-    // Show distance from current position if GPS is active.
+function setActiveTarget(location) {
+    activeTarget = location;
+    appState.target.savedPlaceId = location ? location.id : null;
+    renderAppState();
+}
 
-    if (!gpsActive || !currentLatitude || !currentLongitude) {
-        return "Distance: GPS inactive";
+function getDistanceTextForLocation(location) {
+    if (appState.gps.status !== "active" || appState.gps.latitude === null || appState.gps.longitude === null) {
+        return "Distance unavailable - GPS off";
     }
 
     const distance = calculateDistanceMeters(
-        currentLatitude,
-        currentLongitude,
+        appState.gps.latitude,
+        appState.gps.longitude,
         location.latitude,
         location.longitude
     );
@@ -428,19 +543,17 @@ function getDistanceTextForLocation(location) {
 }
 
 function updateNavigationDisplay() {
-    // Update Trail and Scan target cards.
-
     if (!activeTarget) {
         directionArrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
         bearingReadout.textContent = "No target";
 
         trailTargetName.textContent = "No Active Trail";
-        trailTargetHint.textContent = "Choose a saved place from Library.";
+        trailTargetHint.textContent = "Choose a saved place from Field Notes.";
         trailDistance.textContent = "--";
         trailAccuracy.textContent = "Accuracy unknown";
 
         scanTargetName.textContent = "No target selected";
-        scanTargetMeta.textContent = "Choose a place from Library.";
+        scanTargetMeta.textContent = "Choose a place from Field Notes.";
 
         navigationReadout.textContent = "No navigation target selected.";
         return;
@@ -452,75 +565,97 @@ function updateNavigationDisplay() {
     scanTargetName.textContent = activeTarget.name;
     scanTargetMeta.textContent = "Saved Location";
 
-    if (!currentLatitude || !currentLongitude) {
-        trailDistance.textContent = "--";
+    if (appState.gps.status !== "active" || appState.gps.latitude === null || appState.gps.longitude === null) {
+        directionArrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
+        bearingReadout.textContent = "Enable GPS";
+        trailDistance.textContent = "GPS inactive";
         trailAccuracy.textContent = "Enable GPS";
-        navigationReadout.textContent = "Enable GPS to navigate.";
+        navigationReadout.textContent = "Target locked. Enable GPS to calculate distance.";
         return;
     }
 
     const distance = calculateDistanceMeters(
-        currentLatitude,
-        currentLongitude,
+        appState.gps.latitude,
+        appState.gps.longitude,
         activeTarget.latitude,
         activeTarget.longitude
     );
 
     const bearing = calculateBearingDegrees(
-        currentLatitude,
-        currentLongitude,
+        appState.gps.latitude,
+        appState.gps.longitude,
         activeTarget.latitude,
         activeTarget.longitude
     );
 
-    const arrowRotation = calculateArrowRotation(
-        bearing,
-        phoneHeading
-    );
-
+    const arrowRotation = calculateArrowRotation(bearing, appState.compass.headingDegrees);
     const directionLabel = getDirectionLabel(bearing);
-
     const arrived = hasArrived(distance);
 
     directionArrow.style.transform =
         "translate(-50%, -50%) rotate(" + arrowRotation + "deg)";
 
     bearingReadout.textContent =
-        directionLabel + " " + Math.round(bearing) + "°";
+        appState.compass.status === "calibrated" ?
+            directionLabel + " " + Math.round(bearing) + " degrees" :
+            "Calibrate heading";
 
     trailDistance.textContent = formatDistance(distance);
-
-    trailAccuracy.textContent =
-        "GPS ±" + Math.round(currentAccuracy || 0) + " m";
+    trailAccuracy.textContent = "GPS +/-" + Math.round(appState.gps.accuracyMeters || 0) + " m";
 
     navigationReadout.innerHTML =
         "Target: " + escapeHTML(activeTarget.name) +
         "<br>Distance: " + formatDistance(distance) +
         "<br>Map Direction: " + directionLabel +
-        "<br>Target Bearing: " + Math.round(bearing) + "°" +
-        "<br>Phone Heading: " + (phoneHeading === null ? "not enabled" : Math.round(phoneHeading) + "°") +
-        "<br>Status: " + (arrived ? "Discovery reached 🎯" : "Move toward target");
+        "<br>Target Bearing: " + Math.round(bearing) + " degrees" +
+        "<br>Phone Heading: " + (appState.compass.headingDegrees === null ? "not enabled" : Math.round(appState.compass.headingDegrees) + " degrees") +
+        "<br>Status: " + (arrived ? "Discovery reached" : "Move toward target");
 }
 
 function clearAllSavedLocations() {
-    // Delete all saved locations after confirmation.
+    showModal({
+        title: "Clear Field Notes",
+        message: "Delete every saved place from this browser?",
+        actions: [
+            {
+                label: "Clear All",
+                className: "dangerButton",
+                onClick: function() {
+                    clearLocations();
+                    setActiveTarget(null);
+                    hideModal();
+                    renderLocations();
+                }
+            },
+            { label: "Cancel", className: "secondaryButton", onClick: hideModal }
+        ]
+    });
+}
 
-    if (!confirm("Clear all saved locations?")) {
-        return;
-    }
+function showModal(config) {
+    modalTitle.textContent = config.title;
+    modalMessage.textContent = config.message;
+    modalActions.innerHTML = "";
 
-    clearLocations();
+    config.actions.forEach(function(action) {
+        const button = document.createElement("button");
 
-    activeTarget = null;
+        button.type = "button";
+        button.className = action.className || "secondaryButton";
+        button.textContent = action.label;
+        button.addEventListener("click", action.onClick);
 
-    updateStatusChips();
-    updateNavigationDisplay();
-    renderLocations();
+        modalActions.appendChild(button);
+    });
+
+    modalOverlay.hidden = false;
+}
+
+function hideModal() {
+    modalOverlay.hidden = true;
 }
 
 function escapeHTML(text) {
-    // Prevent user-entered names from becoming HTML.
-
     return String(text)
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
@@ -529,7 +664,5 @@ function escapeHTML(text) {
         .replaceAll("'", "&#039;");
 }
 
-updateStatusChips();
-updateGpsReadouts();
-updateNavigationDisplay();
+renderAppState();
 renderLocations();
