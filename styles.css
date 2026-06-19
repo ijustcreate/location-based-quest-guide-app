@@ -1,115 +1,785 @@
 /* ==================================================
-   Quest Compass Styles
+   Quest Compass v0.5 Field Companion UI
    ================================================== */
 
+/* Main page foundation */
 body {
-    background: #0d0d18;
-    color: white;
-    font-family: Arial, sans-serif;
     margin: 0;
-    padding: 20px;
+    padding: 0;
+    background:
+        radial-gradient(circle at top, rgba(43, 91, 161, 0.28), transparent 32rem),
+        linear-gradient(180deg, #050812 0%, #0b1020 50%, #070711 100%);
+    color: #ffffff;
+    font-family: Arial, Helvetica, sans-serif;
 }
 
-.container {
-    max-width: 900px;
-    margin: auto;
+/* Mobile app shell */
+.appShell {
+    max-width: 920px;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 24px 18px 112px;
+    box-sizing: border-box;
 }
 
-.version {
-    opacity: 0.7;
+/* Header */
+.appHeader {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding-top: 8px;
+    padding-bottom: 12px;
+    background: linear-gradient(180deg, rgba(5, 8, 18, 0.98), rgba(5, 8, 18, 0.72), transparent);
+    backdrop-filter: blur(10px);
 }
 
-.card {
-    background: #1a1a28;
-    border-radius: 18px;
-    padding: 20px;
-    margin-top: 20px;
-    border: 1px solid rgba(255,255,255,0.08);
+/* Title row */
+.titleRow {
+    display: flex;
+    align-items: center;
+    gap: 14px;
 }
 
-button {
-    width: 100%;
-    margin-top: 12px;
-    padding: 14px;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    font-size: 16px;
+/* App icon */
+.appIcon {
+    width: 56px;
+    height: 56px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    font-size: 34px;
 }
 
-.danger {
-    background: darkred;
+/* Title */
+h1 {
+    margin: 0;
+    font-size: 38px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+}
+
+/* Mode subtitle */
+.modeSubtitle {
+    margin: 8px 0 0;
+    color: #6fa7ff;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+/* Settings icon */
+.iconButton {
+    margin-left: auto;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
     color: white;
+    font-size: 24px;
 }
 
-.locationCard {
-    background: #11111a;
-    padding: 14px;
-    margin-top: 14px;
-    border-radius: 14px;
+/* Status chip grid */
+.statusGrid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 18px;
 }
 
-.active {
-    color: lightgreen;
+/* Status chip */
+.statusChip {
+    min-height: 62px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 18px;
+    background: rgba(14, 21, 38, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.02);
 }
 
-.warning {
+/* Status chip icon */
+.chipIcon {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 20px;
+}
+
+/* Chip text */
+.statusChip strong {
+    display: block;
+    font-size: 15px;
+}
+
+.statusChip small {
+    display: block;
+    margin-top: 2px;
+    color: #aeb7c8;
+}
+
+/* Active states */
+.statusChip.active {
+    border-color: rgba(99, 255, 147, 0.45);
+    box-shadow: 0 0 20px rgba(68, 255, 133, 0.1);
+}
+
+.statusChip.active small {
+    color: #74f79b;
+}
+
+.statusChip.warning small {
     color: #ffd166;
 }
 
-.error {
-    color: #ff6b6b;
+/* Panels */
+.modePanel {
+    display: none;
 }
 
-.navigateButton {
-    background: #2d4cff;
-    color: white;
+.modePanel.activePanel {
+    display: block;
 }
 
-.smallText {
-    opacity: 0.75;
+/* General cards */
+.compassCard,
+.targetCard,
+.readoutCard,
+.scannerCard,
+.compactTargetCard,
+.createCard,
+.libraryHeader,
+.locationCard {
+    border-radius: 24px;
+    background: rgba(17, 24, 44, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+        0 22px 50px rgba(0, 0, 0, 0.25),
+        inset 0 0 32px rgba(255, 255, 255, 0.02);
 }
 
-#directionArrow {
-    font-size: 96px;
-    text-align: center;
-    margin: 24px 0;
+/* Compass card */
+.compassCard {
+    margin-top: 18px;
+    padding: 18px;
+}
+
+/* Compass dial */
+.compassDial {
+    position: relative;
+    width: min(78vw, 520px);
+    aspect-ratio: 1;
+    margin: 0 auto;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle, rgba(46, 84, 137, 0.28), rgba(6, 10, 20, 0.94) 68%),
+        repeating-conic-gradient(from 0deg, rgba(98, 156, 255, 0.38) 0deg 1deg, transparent 1deg 6deg);
+    border: 12px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 0 45px rgba(72, 135, 255, 0.16),
+        inset 0 0 70px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+
+/* Compass inner texture */
+.compassDial::before {
+    content: "";
+    position: absolute;
+    inset: 34px;
+    border-radius: 50%;
+    background:
+        linear-gradient(130deg, rgba(255, 255, 255, 0.04), transparent),
+        radial-gradient(circle at center, rgba(95, 144, 224, 0.16), transparent 60%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Cardinal letters */
+.cardinal {
+    position: absolute;
+    z-index: 2;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 28px;
+    font-weight: 800;
+}
+
+.north {
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.east {
+    right: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.south {
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.west {
+    left: 28px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Large navigation arrow */
+.directionArrow {
+    position: absolute;
+    z-index: 3;
+    left: 50%;
+    top: 46%;
+    width: 0;
+    height: 0;
+    transform: translate(-50%, -50%) rotate(0deg);
+    color: #9fc6ff;
+    font-size: 160px;
+    line-height: 1;
+    text-shadow:
+        0 0 18px rgba(83, 151, 255, 0.75),
+        0 0 44px rgba(83, 151, 255, 0.45);
     transition: transform 0.25s ease;
 }
 
-#coords,
-#headingInfo,
-#navigationInfo,
-#targetInfo,
-#markerStatus {
-    line-height: 1.5;
-}
-
-#cameraVideo {
+/* Bearing readout */
+.bearingReadout {
+    position: absolute;
+    z-index: 4;
+    bottom: 70px;
     width: 100%;
-    margin-top: 14px;
-    border-radius: 16px;
-    display: none;
-    background: black;
+    text-align: center;
+    color: #76aaff;
+    font-size: 20px;
+    font-weight: 800;
 }
 
-#cameraCanvas {
-    width: 100%;
-    margin-top: 14px;
-    border-radius: 16px;
-    display: none;
-    background: black;
+/* Target card */
+.targetCard {
+    display: grid;
+    grid-template-columns: 78px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    margin-top: 18px;
+    padding: 18px;
 }
 
-.markerFound {
-    color: lightgreen;
-    font-weight: bold;
+/* Target icon */
+.targetIcon {
+    width: 70px;
+    height: 70px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(94, 255, 143, 0.28), rgba(94, 255, 143, 0.05));
+    border: 1px solid rgba(117, 255, 165, 0.45);
+    font-size: 36px;
+    box-shadow: 0 0 26px rgba(94, 255, 143, 0.22);
 }
 
-.markerSearching {
+/* Small section label */
+.sectionLabel {
+    color: #5aa2ff;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+/* Target typography */
+.targetMain h2,
+.createCard h2,
+.libraryHeader h2,
+.scannerTop h2,
+.compactTargetCard h2 {
+    margin: 5px 0;
+    font-size: 30px;
+}
+
+.targetMain p,
+.compactTargetCard p {
+    margin: 0;
+    color: #aeb7c8;
+}
+
+/* Target stats */
+.targetStats {
+    min-width: 90px;
+    text-align: right;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+    padding-left: 18px;
+}
+
+.targetStats small {
+    display: block;
+    color: #aeb7c8;
+}
+
+.targetStats strong {
+    display: block;
+    font-size: 34px;
+    margin: 4px 0;
+}
+
+/* Action grid */
+.actionGrid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+}
+
+/* Action tile */
+.actionTile {
+    min-height: 116px;
+    padding: 14px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(14, 21, 38, 0.88);
+    color: white;
+}
+
+.actionTile span {
+    display: block;
+    font-size: 32px;
+}
+
+.actionTile strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 15px;
+}
+
+.actionTile small {
+    display: block;
+    margin-top: 5px;
+    color: #aeb7c8;
+}
+
+.greenAction span,
+.greenAction small {
+    color: #74f79b;
+}
+
+.blueAction span,
+.blueAction small {
+    color: #77adff;
+}
+
+.purpleAction span,
+.purpleAction small {
+    color: #c789ff;
+}
+
+.goldAction span,
+.goldAction small {
     color: #ffd166;
 }
 
-.markerLost {
-    color: #ff6b6b;
+/* Readout card */
+.readoutCard {
+    margin-top: 18px;
+    padding: 16px;
+    color: #cbd5e1;
+    line-height: 1.6;
+}
+
+/* Scanner */
+.scannerCard {
+    margin-top: 18px;
+    padding: 16px;
+}
+
+.scannerTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.miniButton {
+    width: auto;
+    padding: 12px 16px;
+    border-radius: 14px;
+    background: #233a66;
+    color: white;
+    border: 1px solid rgba(119, 173, 255, 0.3);
+}
+
+.cameraFrame {
+    position: relative;
+    margin-top: 14px;
+    border-radius: 22px;
+    overflow: hidden;
+    background: black;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.liveBadge {
+    position: absolute;
+    z-index: 4;
+    left: 14px;
+    top: 14px;
+    color: white;
+    font-weight: 800;
+    font-size: 13px;
+}
+
+.liveBadge::first-letter {
+    color: #ff5a4f;
+}
+
+#cameraVideo {
+    display: none;
+}
+
+#cameraCanvas {
+    display: none;
+    width: 100%;
+    background: black;
+}
+
+/* Marker banner */
+.markerBanner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(14, 21, 38, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.markerIcon {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(100, 255, 145, 0.12);
+    font-size: 24px;
+}
+
+.markerBanner strong {
+    color: #74f79b;
+    font-size: 18px;
+}
+
+.markerBanner p {
+    margin: 4px 0 0;
+    color: #cbd5e1;
+}
+
+/* Signal grid */
+.signalGrid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.signalItem {
+    padding: 12px;
+    border-radius: 16px;
+    background: rgba(9, 14, 26, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.signalItem span {
+    display: block;
+    color: #cbd5e1;
+    font-size: 11px;
+    text-transform: uppercase;
+    font-weight: 900;
+}
+
+.signalItem strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 16px;
+}
+
+/* Bars */
+.barTrack {
+    height: 8px;
+    margin-top: 10px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+.barFill {
+    width: 0%;
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.25s ease;
+}
+
+.redFill {
+    background: #ff5a4f;
+}
+
+.blueFill {
+    background: #5aa2ff;
+}
+
+.goldFill {
+    background: #ffd166;
+}
+
+.greenFill {
+    background: #74f79b;
+}
+
+/* Compact target on scan screen */
+.compactTargetCard {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 18px;
+    padding: 18px;
+}
+
+.miniCompass {
+    width: 74px;
+    height: 74px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(43, 76, 133, 0.35);
+    border: 1px solid rgba(119, 173, 255, 0.25);
+    color: #77adff;
+    font-size: 42px;
+}
+
+/* Create */
+.createCard {
+    margin-top: 18px;
+    padding: 18px;
+}
+
+.mapPreview {
+    width: 100%;
+    min-height: 160px;
+    display: grid;
+    place-items: center;
+    margin: 16px 0;
+    border-radius: 22px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent),
+        radial-gradient(circle, rgba(99, 255, 147, 0.25), transparent 35%),
+        rgba(14, 21, 38, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.mapPin {
+    width: 82px;
+    height: 82px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(94, 255, 143, 0.12);
+    border: 1px solid rgba(94, 255, 143, 0.45);
+    font-size: 44px;
+}
+
+label {
+    display: block;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    color: #cbd5e1;
+    font-weight: 800;
+}
+
+input,
+textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(5, 8, 18, 0.86);
+    color: white;
+    font-size: 16px;
+}
+
+textarea {
+    min-height: 92px;
+    resize: vertical;
+}
+
+.fieldReadout {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 14px;
+    background: rgba(9, 14, 26, 0.9);
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
+.primaryButton,
+.secondaryButton {
+    width: 100%;
+    margin-top: 12px;
+    padding: 16px;
+    border-radius: 16px;
+    border: none;
+    color: white;
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.primaryButton {
+    background: linear-gradient(180deg, #2d8a4f, #176532);
+}
+
+.secondaryButton {
+    background: linear-gradient(180deg, #6335a4, #3a216d);
+}
+
+/* Library */
+.libraryHeader {
+    margin-top: 18px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dangerMiniButton {
+    width: auto;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: #8d1c16;
+    color: white;
+    border: none;
+}
+
+.savedList {
+    margin-top: 12px;
+}
+
+.locationCard {
+    padding: 18px;
+    margin-top: 14px;
+}
+
+.locationCard h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+}
+
+.locationCard p {
+    margin: 0;
+    color: #cbd5e1;
+    line-height: 1.5;
+}
+
+.locationActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.followButton {
+    padding: 13px;
+    border-radius: 14px;
+    border: none;
+    background: #2d4cff;
+    color: white;
+    font-weight: 900;
+}
+
+.deleteButton {
+    padding: 13px;
+    border-radius: 14px;
+    border: none;
+    background: #8d1c16;
+    color: white;
+    font-weight: 900;
+}
+
+/* Bottom nav */
+.bottomNav {
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    z-index: 50;
+    width: min(920px, calc(100% - 28px));
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    transform: translateX(-50%);
+    padding: 8px;
+    border-radius: 24px;
+    background: rgba(11, 16, 32, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.45);
+}
+
+.navButton {
+    padding: 10px 4px;
+    border: none;
+    border-radius: 18px;
+    background: transparent;
+    color: #8f9bb1;
+    font-size: 13px;
+}
+
+.navButton span {
+    display: block;
+    font-size: 24px;
+    margin-bottom: 4px;
+}
+
+.activeNav {
+    color: #6fa7ff;
+    background: rgba(68, 122, 220, 0.14);
+    box-shadow: inset 0 0 28px rgba(68, 122, 220, 0.2);
+}
+
+/* Mobile tightening */
+@media (max-width: 720px) {
+    .statusGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .actionGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .signalGrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .targetCard {
+        grid-template-columns: 64px 1fr;
+    }
+
+    .targetStats {
+        grid-column: 1 / -1;
+        text-align: left;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        padding-left: 0;
+        padding-top: 12px;
+    }
+
+    h1 {
+        font-size: 34px;
+    }
+
+    .directionArrow {
+        font-size: 126px;
+    }
 }
