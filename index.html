@@ -3,10 +3,12 @@
 
 <head>
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Quest Compass</title>
 
-    <!-- Styles stay in their own file so this file only handles layout. -->
+    <!-- HTML links to the main stylesheet. -->
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -15,7 +17,7 @@
     <div class="container">
 
         <h1>🧭 Quest Compass</h1>
-        <p class="version">Version 0.3 — Navigation</p>
+        <p class="version">Version 0.4 — Compass + Camera Marker</p>
 
         <section class="card">
             <h2>GPS</h2>
@@ -35,7 +37,23 @@
             </button>
         </section>
 
-        <section class="card" id="navigationCard">
+        <section class="card">
+            <h2>Compass</h2>
+
+            <p id="compassStatus">
+                Compass inactive.
+            </p>
+
+            <div id="headingInfo">
+                Phone heading: unknown
+            </div>
+
+            <button id="compassButton">
+                Enable Compass
+            </button>
+        </section>
+
+        <section class="card">
             <h2>Current Target</h2>
 
             <div id="targetInfo">
@@ -52,6 +70,26 @@
         </section>
 
         <section class="card">
+            <h2>Camera Marker</h2>
+
+            <p class="smallText">
+                Detects a red triangle marker using camera color, lighting correction, and shape confidence.
+            </p>
+
+            <button id="cameraButton">
+                Enable Camera Marker
+            </button>
+
+            <video id="cameraVideo" autoplay playsinline muted></video>
+
+            <canvas id="cameraCanvas"></canvas>
+
+            <div id="markerStatus">
+                Camera marker detection inactive.
+            </div>
+        </section>
+
+        <section class="card">
             <h2>Saved Locations</h2>
 
             <div id="savedLocations"></div>
@@ -63,13 +101,9 @@
 
     </div>
 
-    <!-- Storage loads first because app.js depends on it. -->
     <script src="storage.js"></script>
-
-    <!-- Navigation loads before app.js because app.js uses the navigation math. -->
     <script src="navigation.js"></script>
-
-    <!-- Main app behavior. -->
+    <script src="camera.js"></script>
     <script src="app.js"></script>
 
 </body>
