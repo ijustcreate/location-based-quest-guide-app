@@ -2,69 +2,87 @@
    Quest Compass Styles
    ================================================== */
 
+/* Page basics */
 body {
     background: #0d0d18;
     color: white;
     font-family: Arial, sans-serif;
-
     margin: 0;
     padding: 20px;
 }
 
+/* Main content wrapper */
 .container {
     max-width: 900px;
     margin: auto;
 }
 
+/* Version text under the title */
 .version {
     opacity: 0.7;
 }
 
+/* Main cards */
 .card {
     background: #1a1a28;
-
     border-radius: 18px;
-
     padding: 20px;
-
     margin-top: 20px;
-
     border: 1px solid rgba(255,255,255,0.08);
 }
 
+/* Normal buttons */
 button {
-
     width: 100%;
-
     margin-top: 12px;
-
     padding: 14px;
-
     border: none;
-
     border-radius: 12px;
-
     cursor: pointer;
-
     font-size: 16px;
 }
 
+/* Red delete/destructive buttons */
 .danger {
     background: darkred;
     color: white;
 }
 
+/* Saved location card */
 .locationCard {
-
     background: #11111a;
-
     padding: 12px;
-
     margin-top: 12px;
-
     border-radius: 12px;
 }
 
+/* Green GPS status */
 .active {
     color: lightgreen;
+}
+
+/* Navigation arrow */
+#directionArrow {
+    font-size: 90px;
+    text-align: center;
+    margin: 20px 0;
+    transition: transform 0.3s ease;
+}
+
+/* Navigation text */
+#navigationInfo,
+#targetInfo,
+#coords {
+    line-height: 1.5;
+}
+
+/* Navigate buttons */
+.navigateButton {
+    background: #2d4cff;
+    color: white;
+}
+
+/* Small helper text */
+.smallText {
+    opacity: 0.75;
 }
