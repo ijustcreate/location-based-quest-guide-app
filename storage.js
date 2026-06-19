@@ -26,6 +26,8 @@ function normalizeLocation(location) {
     // Older app versions used slightly different field names.
     // This keeps old saved locations working after UI upgrades.
 
+    const facingDegrees = location.facingDegrees ?? location.headingDegrees ?? null;
+
     return {
         id: location.id || createLocationId(),
         name: location.name || "Unnamed Place",
@@ -35,6 +37,9 @@ function normalizeLocation(location) {
         accuracy: Number(location.accuracy ?? location.accuracyMeters ?? 0),
         category: location.category || "landmark",
         icon: location.icon || "",
+        facingDegrees: facingDegrees === null || facingDegrees === undefined || Number.isNaN(Number(facingDegrees)) ?
+            null :
+            Number(facingDegrees),
         sigil: location.sigil || null,
         createdAt: location.createdAt || new Date().toISOString(),
         updatedAt: location.updatedAt || location.createdAt || new Date().toISOString()

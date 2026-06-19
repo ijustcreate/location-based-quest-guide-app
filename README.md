@@ -16,27 +16,29 @@ https://ijustcreate.github.io/location-based-quest-guide-app/
 
 ## Current Version
 
-Version 0.5 - Milestone 1: Stabilization and Scanner Lock Flow
+Version 0.5.1 - Compact Header, Library Selector, and Scanner HUD
 
-This pass focuses on making the app usable as a mobile field tool before adding larger quest systems.
+This pass keeps the Milestone 1 stabilization goals and tightens the mobile UI so the header and scanner no longer consume unnecessary vertical space.
 
 Current prototype systems include:
 
 - Mobile-safe layout with bottom navigation spacing
 - Safe-area-aware page padding for iPhone-style screens
 - Trail, Scan, Create, and Library tabs
+- Compact header control rail for GPS, compass, scanner, and target/library access
 - Centralized app state labels to avoid contradictory UI states
 - GPS permission flow and live coordinate tracking
 - Compass heading support where the browser/device allows it
-- Saved place creation with name and optional hint
+- Saved place creation with name, optional hint, and captured facing direction when compass data is available
 - Local saved place persistence with `localStorage`
-- Library cards that hide raw coordinates by default
+- Library location selector in the header with full selected-place details below
+- Library details that hide raw coordinates by default
 - Begin Trail, Edit, Delete, and Clear All actions
 - In-app modal dialogs instead of native browser alerts
 - Red triangle camera scanner prototype
 - Scanner states: searching, signal found, holding steady, sigil locked
 - Stable hold requirement before scanner lock
-- Scanner metrics for Color Signal, Symbol Match, Light Quality, Frame Stability, and Lock Confidence
+- Scanner HUD metrics over the camera for Color, Shape, Light, Stability, and Lock
 - Basic PWA metadata and manifest for installable-app behavior
 
 ## Product Vision
@@ -65,7 +67,9 @@ It shows:
 - Compass dial and target bearing
 - Active target name and hint
 - Distance and GPS accuracy when GPS is active
-- Buttons for GPS, compass, scanner, and saving the current place
+- Save This Place as the only Trail-specific action
+
+GPS, compass, scanner, and target/library controls now live in the compact header rail instead of taking up space inside the Trail tab.
 
 Important state rule:
 
@@ -83,13 +87,15 @@ It looks for a red triangle marker using lightweight browser camera analysis:
 - candidate marker boxes are scored
 - the app requires a stable hold before lock
 
-Scanner metrics:
+Scanner HUD metrics:
 
-- Color Signal
-- Symbol Match
-- Light Quality
-- Frame Stability
-- Lock Confidence
+- Color
+- Shape
+- Light
+- Stable
+- Lock
+
+The scanner metrics and lock message are displayed as minimal overlays on the live camera view instead of separate panels below it.
 
 Lock flow:
 
@@ -107,10 +113,13 @@ It supports:
 - Place name
 - Optional hint
 - GPS accuracy display
+- Current facing display when compass data exists
 - Save This Place
 - Save + Follow
 
 If GPS is not active, the app shows a styled `Location Needed` modal instead of a native alert.
+
+Saved places include `facingDegrees` when the compass has a usable heading at save time.
 
 ### Library
 
@@ -118,7 +127,8 @@ Library is the saved place notebook.
 
 It supports:
 
-- Saved place cards
+- Saved-location dropdown in the header
+- Full detail view for the selected saved place
 - Distance when GPS is active
 - Hidden technical coordinates by default
 - Show technical details toggle
@@ -134,7 +144,7 @@ Raw latitude and longitude are hidden by default to keep screenshots cleaner and
 This is a static vanilla HTML/CSS/JavaScript project.
 
 - `index.html` - App shell, tab markup, PWA metadata, modal container
-- `styles.css` - Mobile UI, dark glass styling, safe-area layout, bottom nav, cards, scanner display
+- `styles.css` - Mobile UI, compact header controls, safe-area layout, bottom nav, cards, scanner HUD
 - `app.js` - Main app state, UI rendering, GPS, compass, tabs, modals, library behavior
 - `camera.js` - Camera startup and red triangle scanner logic
 - `navigation.js` - Distance, bearing, direction labels, arrow rotation, arrival detection
@@ -173,6 +183,7 @@ Saved places are normalized into a localStorage-friendly object:
   "latitude": 37.990211,
   "longitude": -121.34857,
   "accuracy": 10,
+  "facingDegrees": 42,
   "category": "landmark",
   "icon": "",
   "sigil": null,

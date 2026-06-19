@@ -32,8 +32,10 @@ const appState = {
 };
 
 let activeTarget = null;
+let selectedLibraryLocationId = null;
 
 const modeSubtitle = document.getElementById("modeSubtitle");
+const headerLocationSelect = document.getElementById("headerLocationSelect");
 
 const gpsChip = document.getElementById("gpsChip");
 const compassChip = document.getElementById("compassChip");
@@ -93,6 +95,21 @@ document.querySelectorAll(".navButton").forEach(function(button) {
     });
 });
 
+gpsChip.addEventListener("click", enableGPS);
+compassChip.addEventListener("click", enableCompass);
+
+scannerChip.addEventListener("click", function() {
+    setMode("scan");
+
+    if (appState.scanner.status === "off" || appState.scanner.status === "error") {
+        enableScanner();
+    }
+});
+
+targetChip.addEventListener("click", function() {
+    setMode("library");
+});
+
 document.getElementById("trailGpsButton").addEventListener("click", enableGPS);
 document.getElementById("trailCompassButton").addEventListener("click", enableCompass);
 
@@ -115,6 +132,11 @@ document.getElementById("createSaveFollowButton").addEventListener("click", func
 });
 
 document.getElementById("clearButton").addEventListener("click", clearAllSavedLocations);
+
+headerLocationSelect.addEventListener("change", function() {
+    selectedLibraryLocationId = headerLocationSelect.value || null;
+    renderLocations();
+});
 
 modalOverlay.addEventListener("click", function(event) {
     if (event.target === modalOverlay) {
@@ -277,6 +299,8 @@ function updateBar(barElement, textElement, value) {
 
 function renderAppState() {
     modeSubtitle.textContent = getHeaderSubtitle();
+    modeSubtitle.hidden = appState.activeTab === "library";
+    headerLocationSelect.hidden = appState.activeTab !== "library";
     renderStatusChips();
     renderGpsReadouts();
     renderCompassReadout();
@@ -363,7 +387,8 @@ function renderGpsReadouts() {
     }
 
     const text =
-        "GPS Active<br>Accuracy: " + Math.round(appState.gps.accuracyMeters || 0) + " m";
+        "GPS Active<br>Accuracy: " + Math.round(appState.gps.accuracyMeters || 0) + " m" +
+        "<br>" + getFacingText();
 
     gpsReadout.innerHTML = text;
     createGpsReadout.innerHTML = text;
@@ -423,6 +448,7 @@ function savePlace(shouldFollow) {
         latitude: appState.gps.latitude,
         longitude: appState.gps.longitude,
         accuracy: appState.gps.accuracyMeters,
+        facingDegrees: appState.compass.headingDegrees,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };
@@ -448,6 +474,8 @@ function renderLocations() {
     const container = document.getElementById("savedLocations");
     const locations = loadLocations();
 
+    renderLibrarySelect(locations);
+
     container.innerHTML = "";
 
     if (locations.length === 0) {
@@ -457,68 +485,120 @@ function renderLocations() {
         return;
     }
 
-    locations.forEach(function(location) {
-        const card = document.createElement("div");
-        const distanceText = getDistanceTextForLocation(location);
-        const savedMeta = "Saved nearby · Accuracy " + Math.round(location.accuracy || 0) + "m";
+    if (!selectedLibraryLocationId || !locations.some(function(location) {
+        return location.id === selectedLibraryLocationId;
+    })) {
+        selectedLibraryLocationId = locations[0].id;
+        headerLocationSelect.value = selectedLibraryLocationId;
+    }
 
-        card.className = "locationCard";
-        card.innerHTML =
-            "<div class='locationCardHeader'>" +
-            "<div><h3>" + escapeHTML(location.name) + "</h3>" +
-            "<p>" + escapeHTML(savedMeta) + "<br>" + escapeHTML(distanceText) + "</p></div>" +
-            "</div>" +
-            "<details class='technicalDetails'>" +
-            "<summary>Show technical details</summary>" +
-            "<p>Lat: " + escapeHTML(location.latitude) + "<br>Lng: " + escapeHTML(location.longitude) + "</p>" +
-            "</details>" +
-            "<div class='locationActions'>" +
-            "<button class='followButton'>Begin Trail</button>" +
-            "<button class='editButton'>Edit</button>" +
-            "<button class='deleteButton'>Delete</button>" +
-            "</div>";
-
-        card.querySelector(".followButton").addEventListener("click", function() {
-            setActiveTarget(location);
-            setMode("trail");
-        });
-
-        card.querySelector(".editButton").addEventListener("click", function() {
-            showModal({
-                title: location.name,
-                message: location.hint || "No clue saved yet.",
-                actions: [
-                    { label: "Close", className: "primaryButton", onClick: hideModal }
-                ]
-            });
-        });
-
-        card.querySelector(".deleteButton").addEventListener("click", function() {
-            showModal({
-                title: "Delete Place",
-                message: "Remove " + location.name + " from Field Notes?",
-                actions: [
-                    {
-                        label: "Delete",
-                        className: "dangerButton",
-                        onClick: function() {
-                            deleteLocationById(location.id);
-
-                            if (activeTarget && activeTarget.id === location.id) {
-                                setActiveTarget(null);
-                            }
-
-                            hideModal();
-                            renderLocations();
-                        }
-                    },
-                    { label: "Cancel", className: "secondaryButton", onClick: hideModal }
-                ]
-            });
-        });
-
-        container.appendChild(card);
+    const selectedLocation = locations.find(function(location) {
+        return location.id === selectedLibraryLocationId;
     });
+
+    renderLocationDetail(container, selectedLocation);
+}
+function renderLibrarySelect(locations) {
+    headerLocationSelect.innerHTML = "";
+
+    if (locations.length === 0) {
+        const option = document.createElement("option");
+
+        option.value = "";
+        option.textContent = "No saved places";
+        headerLocationSelect.appendChild(option);
+        selectedLibraryLocationId = null;
+        return;
+    }
+
+    locations.forEach(function(location) {
+        const option = document.createElement("option");
+
+        option.value = location.id;
+        option.textContent = location.name;
+        headerLocationSelect.appendChild(option);
+    });
+
+    if (!selectedLibraryLocationId) {
+        selectedLibraryLocationId = locations[0].id;
+    }
+
+    headerLocationSelect.value = selectedLibraryLocationId;
+}
+
+function renderLocationDetail(container, location) {
+    const card = document.createElement("div");
+    const distanceText = getDistanceTextForLocation(location);
+    const savedMeta = "Saved nearby - Accuracy " + Math.round(location.accuracy || 0) + "m";
+    const createdAt = location.createdAt ? new Date(location.createdAt).toLocaleString() : "Unknown";
+
+    card.className = "locationCard libraryDetail";
+    card.innerHTML =
+        "<div class='locationDetailHeader'>" +
+        "<div><div class='sectionLabel'>SELECTED PLACE</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
+        "</div>" +
+        "<p class='locationHint'>" + escapeHTML(location.hint || "No clue saved yet.") + "</p>" +
+        "<div class='libraryMetaGrid'>" +
+        "<div><small>Status</small><strong>" + escapeHTML(distanceText) + "</strong></div>" +
+        "<div><small>Saved</small><strong>" + escapeHTML(createdAt) + "</strong></div>" +
+        "<div><small>Accuracy</small><strong>" + Math.round(location.accuracy || 0) + " m</strong></div>" +
+        "<div><small>Facing</small><strong>" + escapeHTML(formatFacing(location.facingDegrees)) + "</strong></div>" +
+        "</div>" +
+        "<p class='savedMeta'>" + escapeHTML(savedMeta) + "</p>" +
+        "<details class='technicalDetails'>" +
+        "<summary>Show technical details</summary>" +
+        "<p>Lat: " + escapeHTML(location.latitude) +
+        "<br>Lng: " + escapeHTML(location.longitude) +
+        "<br>ID: " + escapeHTML(location.id) +
+        "</p>" +
+        "</details>" +
+        "<div class='locationActions'>" +
+        "<button class='followButton'>Begin Trail</button>" +
+        "<button class='editButton'>Edit</button>" +
+        "<button class='deleteButton'>Delete</button>" +
+        "</div>";
+
+    card.querySelector(".followButton").addEventListener("click", function() {
+        setActiveTarget(location);
+        setMode("trail");
+    });
+
+    card.querySelector(".editButton").addEventListener("click", function() {
+        showModal({
+            title: location.name,
+            message: location.hint || "No clue saved yet.",
+            actions: [
+                { label: "Close", className: "primaryButton", onClick: hideModal }
+            ]
+        });
+    });
+
+    card.querySelector(".deleteButton").addEventListener("click", function() {
+        showModal({
+            title: "Delete Place",
+            message: "Remove " + location.name + " from Field Notes?",
+            actions: [
+                {
+                    label: "Delete",
+                    className: "dangerButton",
+                    onClick: function() {
+                        deleteLocationById(location.id);
+
+                        if (activeTarget && activeTarget.id === location.id) {
+                            setActiveTarget(null);
+                        }
+
+                        selectedLibraryLocationId = null;
+                        hideModal();
+                        renderLocations();
+                    }
+                },
+                { label: "Cancel", className: "secondaryButton", onClick: hideModal }
+            ]
+        });
+    });
+
+    container.appendChild(card);
 }
 
 function setActiveTarget(location) {
@@ -540,6 +620,22 @@ function getDistanceTextForLocation(location) {
     );
 
     return "Distance: " + formatDistance(distance);
+}
+
+function getFacingText() {
+    return "Facing: " + formatFacing(appState.compass.headingDegrees);
+}
+
+function formatFacing(degrees) {
+    const number = Number(degrees);
+
+    if (!Number.isFinite(number)) {
+        return "Not captured";
+    }
+
+    const normalized = normalizeDegrees(number);
+
+    return Math.round(normalized) + " degrees " + getDirectionLabel(normalized);
 }
 
 function updateNavigationDisplay() {

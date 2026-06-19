@@ -24,9 +24,12 @@
             <div class="titleRow">
                 <div class="appIcon">🧭</div>
 
-                <div>
+                <div class="titleText">
                     <h1>Quest Compass</h1>
                     <p id="modeSubtitle" class="modeSubtitle">Trail Idle</p>
+                    <select id="headerLocationSelect" class="headerLocationSelect" aria-label="Saved location" hidden>
+                        <option value="">No saved places</option>
+                    </select>
                 </div>
 
                 <button id="settingsButton" class="iconButton" type="button">
@@ -36,37 +39,37 @@
 
             <div class="statusGrid">
 
-                <div id="gpsChip" class="statusChip">
+                <button id="gpsChip" class="statusChip" type="button" aria-label="Enable GPS">
                     <span class="chipIcon">📍</span>
                     <span>
                         <strong>GPS</strong>
                         <small id="gpsChipText">Off</small>
                     </span>
-                </div>
+                </button>
 
-                <div id="compassChip" class="statusChip">
+                <button id="compassChip" class="statusChip" type="button" aria-label="Enable compass">
                     <span class="chipIcon">🧭</span>
                     <span>
                         <strong>Compass</strong>
                         <small id="compassChipText">Off</small>
                     </span>
-                </div>
+                </button>
 
-                <div id="scannerChip" class="statusChip">
+                <button id="scannerChip" class="statusChip" type="button" aria-label="Open scanner">
                     <span class="chipIcon">🔺</span>
                     <span>
                         <strong>Scanner</strong>
                         <small id="scannerChipText">Off</small>
                     </span>
-                </div>
+                </button>
 
-                <div id="targetChip" class="statusChip">
+                <button id="targetChip" class="statusChip" type="button" aria-label="Open library">
                     <span class="chipIcon">🎯</span>
                     <span>
                         <strong>Target</strong>
                         <small id="targetChipText">None</small>
                     </span>
-                </div>
+                </button>
 
             </div>
 
@@ -185,7 +188,7 @@
                     <div class="signalGrid">
 
                         <div class="signalItem">
-                            <span>Color Signal</span>
+                            <span>Color</span>
                             <div class="barTrack">
                                 <div id="redSignalBar" class="barFill redFill"></div>
                             </div>
@@ -193,7 +196,7 @@
                         </div>
 
                         <div class="signalItem">
-                            <span>Symbol Match</span>
+                            <span>Shape</span>
                             <div class="barTrack">
                                 <div id="shapeMatchBar" class="barFill blueFill"></div>
                             </div>
@@ -201,7 +204,7 @@
                         </div>
 
                         <div class="signalItem">
-                            <span>Light Quality</span>
+                            <span>Light</span>
                             <div class="barTrack">
                                 <div id="lightingBar" class="barFill goldFill"></div>
                             </div>
@@ -209,7 +212,7 @@
                         </div>
 
                         <div class="signalItem">
-                            <span>Frame Stability</span>
+                            <span>Stable</span>
                             <div class="barTrack">
                                 <div id="stabilityBar" class="barFill greenFill"></div>
                             </div>
@@ -217,7 +220,7 @@
                         </div>
 
                         <div class="signalItem confidenceItem">
-                            <span>Lock Confidence</span>
+                            <span>Lock</span>
                             <div class="barTrack">
                                 <div id="confidenceBar" class="barFill greenFill"></div>
                             </div>
