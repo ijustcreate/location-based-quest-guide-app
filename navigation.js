@@ -2,29 +2,35 @@
 // Quest Compass Navigation System
 // ==================================================
 //
-// This file handles the math for navigation.
+// This file handles GPS navigation math.
 //
 // It calculates:
-// - Distance between two GPS points
-// - Direction from the user to the target
-// - Simple arrow direction
-// - Arrival status
-//
-// Keeping this separate prevents app.js from becoming a junk drawer.
+// - distance between user and target
+// - bearing toward target
+// - direction label
+// - arrow rotation corrected by phone heading
 
 function toRadians(degrees) {
-    // Convert degrees to radians because JavaScript trig functions use radians.
+    // JavaScript trig functions use radians, not degrees.
+
     return degrees * Math.PI / 180;
 }
 
 function toDegrees(radians) {
-    // Convert radians back into degrees for compass-style direction.
+    // Convert radians back into degrees.
+
     return radians * 180 / Math.PI;
+}
+
+function normalizeDegrees(degrees) {
+    // Keep degrees between 0 and 360.
+
+    return (degrees + 360) % 360;
 }
 
 function calculateDistanceMeters(startLat, startLng, targetLat, targetLng) {
     // Haversine formula.
-    // This estimates distance across the surface of Earth.
+    // Good enough for real-world GPS distance.
 
     const earthRadiusMeters = 6371000;
 
@@ -51,17 +57,17 @@ function calculateDistanceMeters(startLat, startLng, targetLat, targetLng) {
 }
 
 function calculateBearingDegrees(startLat, startLng, targetLat, targetLng) {
-    // Bearing means "what compass direction should I travel?"
-    // 0 degrees = north
-    // 90 degrees = east
-    // 180 degrees = south
-    // 270 degrees = west
+    // Bearing is the map direction from current location to target.
+    //
+    // 0 = north
+    // 90 = east
+    // 180 = south
+    // 270 = west
 
     const lat1 = toRadians(startLat);
     const lat2 = toRadians(targetLat);
 
-    const deltaLng =
-        toRadians(targetLng - startLng);
+    const deltaLng = toRadians(targetLng - startLng);
 
     const y =
         Math.sin(deltaLng) * Math.cos(lat2);
@@ -73,16 +79,29 @@ function calculateBearingDegrees(startLat, startLng, targetLat, targetLng) {
         Math.cos(deltaLng);
 
     const bearing =
-        toDegrees(
-            Math.atan2(y, x)
-        );
+        toDegrees(Math.atan2(y, x));
 
-    // Normalize bearing so it is always between 0 and 360.
-    return (bearing + 360) % 360;
+    return normalizeDegrees(bearing);
+}
+
+function calculateArrowRotation(targetBearing, phoneHeading) {
+    // This is the important compass correction.
+    //
+    // targetBearing = where the target is on the map.
+    // phoneHeading = where the phone is facing.
+    //
+    // Without phoneHeading, the arrow is map-relative.
+    // With phoneHeading, the arrow is phone-relative.
+
+    if (phoneHeading === null || phoneHeading === undefined) {
+        return targetBearing;
+    }
+
+    return normalizeDegrees(targetBearing - phoneHeading);
 }
 
 function getDirectionLabel(bearing) {
-    // Converts degrees into a human-readable compass direction.
+    // Convert bearing degrees into readable direction names.
 
     if (bearing >= 337.5 || bearing < 22.5) {
         return "North";
@@ -116,7 +135,7 @@ function getDirectionLabel(bearing) {
 }
 
 function formatDistance(distanceMeters) {
-    // Keep distance readable for normal humans.
+    // Keep distance readable.
 
     if (distanceMeters < 1) {
         return "Less than 1 meter";
@@ -126,15 +145,12 @@ function formatDistance(distanceMeters) {
         return Math.round(distanceMeters) + " meters";
     }
 
-    const kilometers =
-        distanceMeters / 1000;
-
-    return kilometers.toFixed(2) + " km";
+    return (distanceMeters / 1000).toFixed(2) + " km";
 }
 
 function hasArrived(distanceMeters) {
-    // Arrival radius.
-    // 10 meters is forgiving enough for normal phone GPS.
+    // Phone GPS is imperfect.
+    // 10 meters is a forgiving arrival radius.
 
     return distanceMeters <= 10;
 }
