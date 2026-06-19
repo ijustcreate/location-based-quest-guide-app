@@ -1,268 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Quest Compass</title>
+    <title>Quest Compass</title>
 
-<style>
-body{
-    margin:0;
-    background:#101014;
-    color:white;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    min-height:100vh;
-    padding:20px;
-}
+    <!--
+    Main stylesheet.
 
-.app{
-    max-width:640px;
-    margin:0 auto;
-}
-
-h1{
-    margin:0 0 6px;
-    font-size:32px;
-}
-
-.subtitle{
-    color:#b8b8c8;
-    margin-bottom:20px;
-}
-
-.card{
-    background:#1b1b24;
-    border:1px solid #2d2d3a;
-    border-radius:18px;
-    padding:18px;
-    margin-bottom:16px;
-}
-
-button{
-    width:100%;
-    padding:16px;
-    margin:8px 0;
-    border:none;
-    border-radius:14px;
-    font-size:17px;
-    font-weight:700;
-    background:#f2f2f2;
-    color:#111;
-}
-
-button.secondary{
-    background:#2d2d3a;
-    color:white;
-}
-
-button.danger{
-    background:#4b1d1d;
-    color:white;
-}
-
-.status{
-    color:#9ae6b4;
-    font-weight:700;
-}
-
-.coords{
-    color:#d8d8e8;
-    word-break:break-word;
-}
-
-.location-item{
-    background:#121218;
-    border:1px solid #30303d;
-    border-radius:14px;
-    padding:14px;
-    margin-top:10px;
-}
-
-.location-name{
-    font-weight:800;
-    font-size:18px;
-}
-
-.small{
-    color:#a7a7b7;
-    font-size:14px;
-}
-</style>
+    Keeps ALL visual styling out of the HTML.
+    -->
+    <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
 
-<div class="app">
+    <div class="container">
 
-<h1>🧭 Quest Compass</h1>
-<div class="subtitle">v0.2 — Save Current Location</div>
+        <h1>🧭 Quest Compass</h1>
+        <p class="version">v0.3</p>
 
-<div class="card">
-    <h2>GPS</h2>
+        <!--
+        GPS Card
 
-    <p id="status" class="status">Waiting for GPS...</p>
+        Displays current GPS information.
+        -->
+        <section class="card">
 
-    <p id="coords" class="coords">No coordinates yet.</p>
+            <h2>GPS</h2>
 
-    <button onclick="startGPS()">Enable GPS</button>
-    <button onclick="saveCurrentLocation()" class="secondary">Save Current Location</button>
-</div>
+            <p id="status">
+                GPS inactive
+            </p>
 
-<div class="card">
-    <h2>Saved Locations</h2>
+            <div id="coords">
+                Waiting for GPS...
+            </div>
 
-    <p class="small">
-        Locations are saved only on this phone/browser for now.
-    </p>
+            <button id="gpsButton">
+                Enable GPS
+            </button>
 
-    <div id="savedLocations"></div>
+            <button id="saveButton">
+                Save Current Location
+            </button>
 
-    <button onclick="clearLocations()" class="danger">Clear All Saved Locations</button>
-</div>
+        </section>
 
-</div>
+        <!--
+        Saved Locations
 
-<script>
-let currentPosition = null;
+        Populated automatically from storage.js
+        -->
+        <section class="card">
 
-function startGPS(){
+            <h2>Saved Locations</h2>
 
-    if(!navigator.geolocation){
-        document.getElementById("status").innerText = "GPS is not supported on this device.";
-        return;
-    }
+            <div id="savedLocations">
 
-    document.getElementById("status").innerText = "Requesting GPS permission...";
+            </div>
 
-    navigator.geolocation.watchPosition(
-        function(position){
+            <button id="clearButton" class="danger">
+                Clear All Saved Locations
+            </button>
 
-            currentPosition = {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                accuracy: position.coords.accuracy,
-                savedAt: new Date().toISOString()
-            };
+        </section>
 
-            document.getElementById("status").innerText = "GPS active";
+    </div>
 
-            document.getElementById("coords").innerHTML =
-                "Latitude: " + currentPosition.lat.toFixed(6) +
-                "<br>Longitude: " + currentPosition.lng.toFixed(6) +
-                "<br>Accuracy: about " + Math.round(currentPosition.accuracy) + " meters";
-        },
+    <!--
+    Storage system.
 
-        function(error){
-            document.getElementById("status").innerText = "GPS error: " + error.message;
-        },
+    Handles saving and loading locations.
+    -->
+    <script src="storage.js"></script>
 
-        {
-            enableHighAccuracy:true,
-            maximumAge:0,
-            timeout:15000
-        }
-    );
-}
-
-function getSavedLocations(){
-    const raw = localStorage.getItem("questCompassLocations");
-
-    if(!raw){
-        return [];
-    }
-
-    try{
-        return JSON.parse(raw);
-    }catch(e){
-        return [];
-    }
-}
-
-function setSavedLocations(locations){
-    localStorage.setItem("questCompassLocations", JSON.stringify(locations));
-}
-
-function saveCurrentLocation(){
-
-    if(!currentPosition){
-        alert("Enable GPS first and wait for coordinates.");
-        return;
-    }
-
-    const name = prompt("Name this location:");
-
-    if(!name || !name.trim()){
-        return;
-    }
-
-    const locations = getSavedLocations();
-
-    locations.push({
-        id: "loc-" + Date.now(),
-        name: name.trim(),
-        lat: currentPosition.lat,
-        lng: currentPosition.lng,
-        accuracy: currentPosition.accuracy,
-        savedAt: currentPosition.savedAt
-    });
-
-    setSavedLocations(locations);
-    renderSavedLocations();
-}
-
-function deleteLocation(id){
-    const locations = getSavedLocations().filter(location => location.id !== id);
-    setSavedLocations(locations);
-    renderSavedLocations();
-}
-
-function clearLocations(){
-    if(confirm("Delete all saved locations?")){
-        localStorage.removeItem("questCompassLocations");
-        renderSavedLocations();
-    }
-}
-
-function renderSavedLocations(){
-
-    const container = document.getElementById("savedLocations");
-    const locations = getSavedLocations();
-
-    if(locations.length === 0){
-        container.innerHTML = "<p class='small'>No saved locations yet.</p>";
-        return;
-    }
-
-    container.innerHTML = "";
-
-    locations.forEach(function(location){
-
-        const item = document.createElement("div");
-        item.className = "location-item";
-
-        item.innerHTML =
-            "<div class='location-name'>" + escapeHTML(location.name) + "</div>" +
-            "<div class='small'>Lat: " + location.lat.toFixed(6) + "</div>" +
-            "<div class='small'>Lng: " + location.lng.toFixed(6) + "</div>" +
-            "<div class='small'>Accuracy: about " + Math.round(location.accuracy) + " meters</div>" +
-            "<button class='danger' onclick='deleteLocation(\"" + location.id + "\")'>Delete</button>";
-
-        container.appendChild(item);
-    });
-}
-
-function escapeHTML(text){
-    return text
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-}
-
-renderSavedLocations();
-</script>
+    <!--
+    Main application logic.
+    -->
+    <script src="app.js"></script>
 
 </body>
+
 </html>
