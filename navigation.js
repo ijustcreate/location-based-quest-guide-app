@@ -8,29 +8,29 @@
 // - distance between user and target
 // - bearing toward target
 // - direction label
-// - arrow rotation corrected by phone heading
+// - phone-relative arrow correction
 
 function toRadians(degrees) {
-    // JavaScript trig functions use radians, not degrees.
+    // JavaScript trig functions use radians.
 
     return degrees * Math.PI / 180;
 }
 
 function toDegrees(radians) {
-    // Convert radians back into degrees.
+    // Convert radians back to degrees.
 
     return radians * 180 / Math.PI;
 }
 
 function normalizeDegrees(degrees) {
-    // Keep degrees between 0 and 360.
+    // Keep degrees inside 0-360.
 
     return (degrees + 360) % 360;
 }
 
 function calculateDistanceMeters(startLat, startLng, targetLat, targetLng) {
     // Haversine formula.
-    // Good enough for real-world GPS distance.
+    // Good enough for real-world GPS distances.
 
     const earthRadiusMeters = 6371000;
 
@@ -85,13 +85,10 @@ function calculateBearingDegrees(startLat, startLng, targetLat, targetLng) {
 }
 
 function calculateArrowRotation(targetBearing, phoneHeading) {
-    // This is the important compass correction.
+    // Convert map bearing into phone-relative arrow direction.
     //
     // targetBearing = where the target is on the map.
-    // phoneHeading = where the phone is facing.
-    //
-    // Without phoneHeading, the arrow is map-relative.
-    // With phoneHeading, the arrow is phone-relative.
+    // phoneHeading = where the phone is physically facing.
 
     if (phoneHeading === null || phoneHeading === undefined) {
         return targetBearing;
@@ -101,7 +98,7 @@ function calculateArrowRotation(targetBearing, phoneHeading) {
 }
 
 function getDirectionLabel(bearing) {
-    // Convert bearing degrees into readable direction names.
+    // Convert degrees into readable compass directions.
 
     if (bearing >= 337.5 || bearing < 22.5) {
         return "North";
@@ -135,21 +132,21 @@ function getDirectionLabel(bearing) {
 }
 
 function formatDistance(distanceMeters) {
-    // Keep distance readable.
+    // Keep distance human-readable.
 
     if (distanceMeters < 1) {
-        return "Less than 1 meter";
+        return "Less than 1 m";
     }
 
     if (distanceMeters < 1000) {
-        return Math.round(distanceMeters) + " meters";
+        return Math.round(distanceMeters) + " m";
     }
 
     return (distanceMeters / 1000).toFixed(2) + " km";
 }
 
 function hasArrived(distanceMeters) {
-    // Phone GPS is imperfect.
+    // GPS is imperfect.
     // 10 meters is a forgiving arrival radius.
 
     return distanceMeters <= 10;
