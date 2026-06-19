@@ -2,31 +2,33 @@
 // Quest Compass Storage System
 // ==================================================
 //
-// This file only handles saving and loading data.
+// This file only handles saved location data.
 //
-// Right now it uses localStorage.
-// That means saved locations stay on this phone/browser.
+// It currently uses localStorage, which means:
+// - free
+// - fast
+// - no account required
+// - data only lives on this phone/browser
 //
-// Later, this can be replaced with Supabase, Firebase,
-// GitHub-backed JSON, or another real database without
-// rewriting the whole app.
+// Later this file can be swapped for a real database
+// without rewriting the whole app.
 
 const STORAGE_KEY = "questCompassLocations";
 
 function createLocationId() {
-    // Create a simple unique ID for saved locations.
+    // Create a simple unique ID.
 
     return "loc-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
 }
 
 function normalizeLocation(location) {
-    // Older saved locations may use latitude/longitude.
-    // Future data may use lat/lng.
-    // This keeps both working.
+    // Older app versions used slightly different field names.
+    // This keeps old saved locations working after UI upgrades.
 
     return {
         id: location.id || createLocationId(),
-        name: location.name || "Unnamed Location",
+        name: location.name || "Unnamed Place",
+        hint: location.hint || "",
         latitude: Number(location.latitude ?? location.lat),
         longitude: Number(location.longitude ?? location.lng),
         accuracy: Number(location.accuracy ?? 0),
@@ -35,7 +37,7 @@ function normalizeLocation(location) {
 }
 
 function loadLocations() {
-    // Read saved locations from browser storage.
+    // Load saved locations from localStorage.
 
     const saved = localStorage.getItem(STORAGE_KEY);
 
@@ -52,14 +54,14 @@ function loadLocations() {
 
         return parsed.map(normalizeLocation);
     } catch (error) {
-        // If storage gets corrupted, fail safely.
+        // If storage gets corrupted, return an empty list.
 
         return [];
     }
 }
 
 function saveLocations(locations) {
-    // Convert the location list into text and save it.
+    // Save the full location list.
 
     localStorage.setItem(
         STORAGE_KEY,
@@ -68,7 +70,7 @@ function saveLocations(locations) {
 }
 
 function addLocation(location) {
-    // Add one location to the saved list.
+    // Add one saved location.
 
     const locations = loadLocations();
 
