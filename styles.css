@@ -1,0 +1,70 @@
+/* ==================================================
+   Quest Compass Styles
+   ================================================== */
+
+body {
+    background: #0d0d18;
+    color: white;
+    font-family: Arial, sans-serif;
+
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 900px;
+    margin: auto;
+}
+
+.version {
+    opacity: 0.7;
+}
+
+.card {
+    background: #1a1a28;
+
+    border-radius: 18px;
+
+    padding: 20px;
+
+    margin-top: 20px;
+
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+button {
+
+    width: 100%;
+
+    margin-top: 12px;
+
+    padding: 14px;
+
+    border: none;
+
+    border-radius: 12px;
+
+    cursor: pointer;
+
+    font-size: 16px;
+}
+
+.danger {
+    background: darkred;
+    color: white;
+}
+
+.locationCard {
+
+    background: #11111a;
+
+    padding: 12px;
+
+    margin-top: 12px;
+
+    border-radius: 12px;
+}
+
+.active {
+    color: lightgreen;
+}
