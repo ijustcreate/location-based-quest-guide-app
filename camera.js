@@ -2,30 +2,39 @@
 // Quest Compass Camera Marker Detector
 // ==================================================
 //
-// This file handles camera access and red triangle detection.
+// This is the Sigil Scanner system.
 //
-// It treats the camera frame like a rough Photoshop file:
+// It opens the camera and looks for a red triangle.
+// It returns scanner data back to app.js so the UI can show:
+// - red signal
+// - shape match
+// - lighting
+// - stability
+// - confidence
 //
-// 1. Sample scene lighting.
-// 2. Estimate the color cast.
-// 3. Correct pixels against that lighting.
-// 4. Convert corrected pixels to HSV.
-// 5. Look for red marker pixels.
-// 6. Estimate whether the red area behaves like a triangle.
-//
-// This is a prototype detector.
-// It is local, free, and does not use cloud AI.
+// This detector is intentionally local.
+// No cloud. No database. No paid API goblin.
 
 let cameraStream = null;
 let cameraDetectionTimer = null;
 let stableMarkerFrames = 0;
+let lastBestBox = null;
 
-function startCameraMarkerDetection(videoElement, canvasElement, statusElement) {
-    // Ask for rear camera access.
+function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
+    // Ask for the rear camera if possible.
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        statusElement.textContent = "Camera is not supported on this device.";
-        statusElement.className = "markerLost";
+        onResult({
+            title: "Camera unavailable",
+            message: "This browser does not support camera access.",
+            redSignal: 0,
+            shapeMatch: 0,
+            lighting: 0,
+            stability: 0,
+            confidence: 0,
+            confirmed: false
+        });
+
         return;
     }
 
@@ -44,9 +53,6 @@ function startCameraMarkerDetection(videoElement, canvasElement, statusElement) 
         videoElement.style.display = "none";
         canvasElement.style.display = "block";
 
-        statusElement.textContent = "Camera active. Searching for red triangle...";
-        statusElement.className = "markerSearching";
-
         videoElement.play();
 
         if (cameraDetectionTimer) {
@@ -54,21 +60,29 @@ function startCameraMarkerDetection(videoElement, canvasElement, statusElement) 
         }
 
         cameraDetectionTimer = setInterval(function() {
-            detectRedTriangle(
+            scanFrameForRedTriangle(
                 videoElement,
                 canvasElement,
-                statusElement
+                onResult
             );
         }, 250);
 
     }).catch(function(error) {
-        statusElement.textContent = "Camera error: " + error.message;
-        statusElement.className = "markerLost";
+        onResult({
+            title: "Camera error",
+            message: error.message,
+            redSignal: 0,
+            shapeMatch: 0,
+            lighting: 0,
+            stability: 0,
+            confidence: 0,
+            confirmed: false
+        });
     });
 }
 
-function detectRedTriangle(videoElement, canvasElement, statusElement) {
-    // Only scan when the camera has real video dimensions.
+function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
+    // Do not scan until video is ready.
 
     if (!videoElement.videoWidth || !videoElement.videoHeight) {
         return;
@@ -76,10 +90,7 @@ function detectRedTriangle(videoElement, canvasElement, statusElement) {
 
     const context = canvasElement.getContext("2d");
 
-    // Use a smaller scan size for speed.
-    // This keeps the phone from melting like a cursed Game Boy.
-
-    const scanWidth = 240;
+    const scanWidth = 220;
 
     const scanHeight = Math.round(
         videoElement.videoHeight / videoElement.videoWidth * scanWidth
@@ -105,71 +116,105 @@ function detectRedTriangle(videoElement, canvasElement, statusElement) {
 
     const lighting = estimateSceneLighting(frame.data);
 
-    const result = analyzeRedTriangle(
+    const mask = buildRedMask(
         frame.data,
         scanWidth,
         scanHeight,
         lighting
     );
 
-    drawDetectionOverlay(
-        context,
-        result
+    const candidates = findRedComponents(
+        mask,
+        scanWidth,
+        scanHeight
     );
 
-    if (result.confidence >= 70) {
-        stableMarkerFrames += 1;
-    } else {
+    const best = scoreBestCandidate(
+        candidates,
+        mask,
+        scanWidth,
+        scanHeight
+    );
+
+    context.drawImage(
+        videoElement,
+        0,
+        0,
+        scanWidth,
+        scanHeight
+    );
+
+    if (!best) {
         stableMarkerFrames = 0;
-    }
+        lastBestBox = null;
 
-    if (stableMarkerFrames >= 4) {
-        statusElement.textContent =
-            "Red triangle confirmed 🔺 Confidence: " +
-            result.confidence +
-            "%";
+        onResult({
+            title: "Scanning",
+            message: "Searching for red triangle.",
+            redSignal: 0,
+            shapeMatch: 0,
+            lighting: lighting.quality,
+            stability: 0,
+            confidence: 0,
+            confirmed: false
+        });
 
-        statusElement.className = "markerFound";
         return;
     }
 
-    if (result.redPixels > 0) {
-        statusElement.textContent =
-            "Red found. Triangle confidence: " +
-            result.confidence +
-            "%. Hold steady.";
+    updateStability(best.box);
 
-        statusElement.className = "markerSearching";
-        return;
-    }
+    const stabilityScore = Math.min(
+        100,
+        stableMarkerFrames * 25
+    );
 
-    statusElement.textContent =
-        "Searching for red triangle. Lighting correction active.";
+    const confidence = Math.round(
+        best.redSignal * 0.25 +
+        best.shapeMatch * 0.35 +
+        best.hollowScore * 0.15 +
+        lighting.quality * 0.1 +
+        stabilityScore * 0.15
+    );
 
-    statusElement.className = "markerSearching";
+    const confirmed =
+        confidence >= 76 &&
+        stableMarkerFrames >= 3;
+
+    drawCandidateOverlay(
+        context,
+        best.box,
+        confidence,
+        confirmed
+    );
+
+    onResult({
+        title: confirmed ? "Marker confirmed" : "Hold steady",
+        message: confirmed ?
+            "Red triangle detected." :
+            "Red found. Center the triangle and hold still.",
+        redSignal: best.redSignal,
+        shapeMatch: best.shapeMatch,
+        lighting: lighting.quality,
+        stability: stabilityScore,
+        confidence: confidence,
+        confirmed: confirmed
+    });
 }
 
 function estimateSceneLighting(data) {
-    // Estimate the light color in the scene.
+    // Estimate scene lighting color.
     //
-    // This is the "turn off the lighting layer" approximation.
-    //
-    // We prefer neutral-ish pixels because they reveal the lighting color.
-    // White paper under yellow light looks yellow.
-    // Gray rock under blue shade looks blue.
-    //
-    // If we cannot find enough neutral pixels, we fall back to averaging
-    // the full frame.
+    // This approximates removing the "lighting layer"
+    // before reading marker color.
 
-    let neutralRedTotal = 0;
-    let neutralGreenTotal = 0;
-    let neutralBlueTotal = 0;
+    let neutralRed = 0;
+    let neutralGreen = 0;
+    let neutralBlue = 0;
     let neutralCount = 0;
 
-    let fallbackRedTotal = 0;
-    let fallbackGreenTotal = 0;
-    let fallbackBlueTotal = 0;
-    let fallbackCount = 0;
+    let brightnessTotal = 0;
+    let usableCount = 0;
 
     for (let i = 0; i < data.length; i += 4) {
         const r = data[i];
@@ -181,74 +226,95 @@ function estimateSceneLighting(data) {
         const brightness = (r + g + b) / 3;
         const chroma = max - min;
 
-        if (brightness > 35 && brightness < 240) {
-            fallbackRedTotal += r;
-            fallbackGreenTotal += g;
-            fallbackBlueTotal += b;
-            fallbackCount += 1;
+        if (brightness > 35 && brightness < 235) {
+            brightnessTotal += brightness;
+            usableCount += 1;
 
-            if (chroma < 35) {
-                neutralRedTotal += r;
-                neutralGreenTotal += g;
-                neutralBlueTotal += b;
+            if (chroma < 38) {
+                neutralRed += r;
+                neutralGreen += g;
+                neutralBlue += b;
                 neutralCount += 1;
             }
         }
     }
 
-    if (neutralCount > 80) {
-        return {
-            red: neutralRedTotal / neutralCount,
-            green: neutralGreenTotal / neutralCount,
-            blue: neutralBlueTotal / neutralCount
-        };
-    }
+    const quality = usableCount === 0 ?
+        0 :
+        Math.max(
+            15,
+            Math.min(
+                100,
+                Math.round((brightnessTotal / usableCount) / 180 * 100)
+            )
+        );
 
-    if (fallbackCount > 0) {
+    if (neutralCount < 40) {
         return {
-            red: fallbackRedTotal / fallbackCount,
-            green: fallbackGreenTotal / fallbackCount,
-            blue: fallbackBlueTotal / fallbackCount
+            red: 128,
+            green: 128,
+            blue: 128,
+            quality: quality
         };
     }
 
     return {
-        red: 128,
-        green: 128,
-        blue: 128
+        red: neutralRed / neutralCount,
+        green: neutralGreen / neutralCount,
+        blue: neutralBlue / neutralCount,
+        quality: quality
     };
 }
 
+function buildRedMask(data, width, height, lighting) {
+    // Create a black/white layer:
+    // 1 = red marker pixel
+    // 0 = not red
+
+    const mask = new Uint8Array(width * height);
+
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            const index = (y * width + x) * 4;
+
+            const corrected = correctForLighting(
+                data[index],
+                data[index + 1],
+                data[index + 2],
+                lighting
+            );
+
+            if (
+                isRedPixel(
+                    corrected.r,
+                    corrected.g,
+                    corrected.b
+                )
+            ) {
+                mask[y * width + x] = 1;
+            }
+        }
+    }
+
+    return mask;
+}
+
 function correctForLighting(r, g, b, lighting) {
-    // White-balance correction.
-    //
-    // If the lighting is too warm, red may be overrepresented.
-    // If the lighting is too cool, blue may be overrepresented.
-    //
-    // This divides the pixel by the estimated lighting color,
-    // then rescales it back into normal RGB.
+    // Divide by estimated lighting color and rescale.
+    // This is the cheap but useful "turn off lighting layer" trick.
 
     const averageLight =
         (lighting.red + lighting.green + lighting.blue) / 3;
 
-    const correctedRed =
-        clampColor(r * averageLight / Math.max(lighting.red, 1));
-
-    const correctedGreen =
-        clampColor(g * averageLight / Math.max(lighting.green, 1));
-
-    const correctedBlue =
-        clampColor(b * averageLight / Math.max(lighting.blue, 1));
-
     return {
-        r: correctedRed,
-        g: correctedGreen,
-        b: correctedBlue
+        r: clampColor(r * averageLight / Math.max(lighting.red, 1)),
+        g: clampColor(g * averageLight / Math.max(lighting.green, 1)),
+        b: clampColor(b * averageLight / Math.max(lighting.blue, 1))
     };
 }
 
 function clampColor(value) {
-    // Keep color values inside the normal 0-255 range.
+    // Keep color values inside RGB range.
 
     return Math.max(
         0,
@@ -260,12 +326,7 @@ function clampColor(value) {
 }
 
 function rgbToHsv(r, g, b) {
-    // Convert RGB into HSV.
-    //
-    // HSV separates:
-    // hue = color family
-    // saturation = color strength
-    // value = brightness
+    // HSV separates color from brightness better than raw RGB.
 
     r = r / 255;
     g = g / 255;
@@ -273,7 +334,6 @@ function rgbToHsv(r, g, b) {
 
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
-
     const delta = max - min;
 
     let hue = 0;
@@ -292,161 +352,201 @@ function rgbToHsv(r, g, b) {
         hue += 360;
     }
 
-    const saturation =
-        max === 0 ? 0 : delta / max;
-
-    const value = max;
-
     return {
         hue: hue,
-        saturation: saturation,
-        value: value
+        saturation: max === 0 ? 0 : delta / max,
+        value: max
     };
 }
 
-function isRedMarkerPixel(r, g, b, lighting) {
-    // Correct the pixel first.
-    // Then judge color using HSV, not raw RGB.
+function isRedPixel(r, g, b) {
+    // Red can wrap around hue 0/360.
 
-    const corrected =
-        correctForLighting(
-            r,
-            g,
-            b,
-            lighting
-        );
-
-    const hsv =
-        rgbToHsv(
-            corrected.r,
-            corrected.g,
-            corrected.b
-        );
+    const hsv = rgbToHsv(r, g, b);
 
     const hueIsRed =
-        hsv.hue < 22 || hsv.hue > 338;
+        hsv.hue < 22 ||
+        hsv.hue > 338;
 
-    const saturatedEnough =
-        hsv.saturation > 0.38;
-
-    const brightEnough =
-        hsv.value > 0.18;
-
-    return hueIsRed && saturatedEnough && brightEnough;
+    return (
+        hueIsRed &&
+        hsv.saturation > 0.38 &&
+        hsv.value > 0.16
+    );
 }
 
-function analyzeRedTriangle(data, width, height, lighting) {
-    // Find red pixels and measure their shape.
+function findRedComponents(mask, width, height) {
+    // Find separate red blobs instead of one giant scene-wide box.
 
-    let redPixels = 0;
-
-    let minX = width;
-    let minY = height;
-    let maxX = 0;
-    let maxY = 0;
-
-    const rowBuckets = new Array(12).fill(0);
+    const visited = new Uint8Array(width * height);
+    const components = [];
 
     for (let y = 0; y < height; y += 1) {
         for (let x = 0; x < width; x += 1) {
-            const index = (y * width + x) * 4;
+            const startIndex = y * width + x;
 
-            const r = data[index];
-            const g = data[index + 1];
-            const b = data[index + 2];
+            if (mask[startIndex] === 0 || visited[startIndex]) {
+                continue;
+            }
 
-            if (
-                isRedMarkerPixel(
-                    r,
-                    g,
-                    b,
-                    lighting
-                )
-            ) {
-                redPixels += 1;
+            const component = floodFillComponent(
+                x,
+                y,
+                mask,
+                visited,
+                width,
+                height
+            );
 
-                minX = Math.min(minX, x);
-                minY = Math.min(minY, y);
-                maxX = Math.max(maxX, x);
-                maxY = Math.max(maxY, y);
-
-                const bucket = Math.floor(
-                    y / height * rowBuckets.length
-                );
-
-                rowBuckets[
-                    Math.min(bucket, rowBuckets.length - 1)
-                ] += 1;
+            if (component.count >= 18) {
+                components.push(component);
             }
         }
     }
 
-    if (redPixels < 45) {
-        return {
-            redPixels: redPixels,
-            confidence: 0,
-            box: null
-        };
+    return components;
+}
+
+function floodFillComponent(startX, startY, mask, visited, width, height) {
+    // Basic connected-component search.
+
+    const stack = [
+        {
+            x: startX,
+            y: startY
+        }
+    ];
+
+    let count = 0;
+    let minX = startX;
+    let maxX = startX;
+    let minY = startY;
+    let maxY = startY;
+
+    while (stack.length > 0) {
+        const point = stack.pop();
+
+        if (
+            point.x < 0 ||
+            point.x >= width ||
+            point.y < 0 ||
+            point.y >= height
+        ) {
+            continue;
+        }
+
+        const index = point.y * width + point.x;
+
+        if (visited[index] || mask[index] === 0) {
+            continue;
+        }
+
+        visited[index] = 1;
+        count += 1;
+
+        minX = Math.min(minX, point.x);
+        maxX = Math.max(maxX, point.x);
+        minY = Math.min(minY, point.y);
+        maxY = Math.max(maxY, point.y);
+
+        stack.push({ x: point.x + 1, y: point.y });
+        stack.push({ x: point.x - 1, y: point.y });
+        stack.push({ x: point.x, y: point.y + 1 });
+        stack.push({ x: point.x, y: point.y - 1 });
     }
 
-    const boxWidth = maxX - minX + 1;
-    const boxHeight = maxY - minY + 1;
-    const boxArea = boxWidth * boxHeight;
-
-    const frameArea = width * height;
-
-    const boxSizeRatio = boxArea / frameArea;
-
-    const aspectRatio = boxWidth / Math.max(boxHeight, 1);
-
-    const density = redPixels / Math.max(boxArea, 1);
-
-    const sizeScore =
-        scoreRange(
-            boxSizeRatio,
-            0.015,
-            0.35
-        );
-
-    const aspectScore =
-        scoreRange(
-            aspectRatio,
-            0.55,
-            1.9
-        );
-
-    const densityScore =
-        scoreRange(
-            density,
-            0.025,
-            0.45
-        );
-
-    const profileScore =
-        calculateTriangleProfileScore(rowBuckets);
-
-    const confidence = Math.round(
-        sizeScore * 25 +
-        aspectScore * 20 +
-        densityScore * 20 +
-        profileScore * 35
-    );
-
     return {
-        redPixels: redPixels,
-        confidence: confidence,
+        count: count,
         box: {
             x: minX,
             y: minY,
-            width: boxWidth,
-            height: boxHeight
+            width: maxX - minX + 1,
+            height: maxY - minY + 1
         }
     };
 }
 
+function scoreBestCandidate(components, mask, width, height) {
+    // Judge each red blob and choose the best marker candidate.
+
+    let best = null;
+
+    components.forEach(function(component) {
+        const box = component.box;
+        const boxArea = box.width * box.height;
+        const frameArea = width * height;
+
+        const sizeRatio = boxArea / frameArea;
+        const aspect = box.width / Math.max(box.height, 1);
+        const density = component.count / Math.max(boxArea, 1);
+
+        if (sizeRatio < 0.002 || sizeRatio > 0.22) {
+            return;
+        }
+
+        if (box.x <= 1 || box.y <= 1 || box.x + box.width >= width - 1 || box.y + box.height >= height - 1) {
+            return;
+        }
+
+        const redSignal = Math.min(
+            100,
+            Math.round(component.count / 160 * 100)
+        );
+
+        const aspectScore =
+            scoreRange(
+                aspect,
+                0.45,
+                2.2
+            );
+
+        const densityScore =
+            scoreRange(
+                density,
+                0.035,
+                0.38
+            );
+
+        const hollowScore =
+            calculateHollowCenterScore(
+                box,
+                mask,
+                width
+            );
+
+        const triangleProfile =
+            calculateTriangleProfileScore(
+                box,
+                mask,
+                width
+            );
+
+        const shapeMatch = Math.round(
+            aspectScore * 22 +
+            densityScore * 22 +
+            hollowScore * 28 +
+            triangleProfile * 28
+        );
+
+        const candidate = {
+            box: box,
+            redSignal: redSignal,
+            shapeMatch: shapeMatch,
+            hollowScore: hollowScore * 100,
+            total: redSignal * 0.35 + shapeMatch * 0.65
+        };
+
+        if (!best || candidate.total > best.total) {
+            best = candidate;
+        }
+    });
+
+    return best;
+}
+
 function scoreRange(value, min, max) {
-    // Returns 1 if value is inside a useful range.
-    // Returns lower scores when outside the range.
+    // Score 1 inside a useful range.
+    // Score lower outside it.
 
     if (value >= min && value <= max) {
         return 1;
@@ -465,13 +565,63 @@ function scoreRange(value, min, max) {
     );
 }
 
-function calculateTriangleProfileScore(rowBuckets) {
-    // A triangle usually changes width across its height.
-    //
-    // A rectangle has a flatter row profile.
-    // A triangle has row counts that vary more strongly.
+function calculateHollowCenterScore(box, mask, width) {
+    // A triangle outline should have a mostly non-red center.
 
-    const total = rowBuckets.reduce(
+    const startX = Math.floor(box.x + box.width * 0.32);
+    const endX = Math.floor(box.x + box.width * 0.68);
+
+    const startY = Math.floor(box.y + box.height * 0.32);
+    const endY = Math.floor(box.y + box.height * 0.68);
+
+    let centerPixels = 0;
+    let redCenterPixels = 0;
+
+    for (let y = startY; y <= endY; y += 1) {
+        for (let x = startX; x <= endX; x += 1) {
+            centerPixels += 1;
+
+            if (mask[y * width + x] === 1) {
+                redCenterPixels += 1;
+            }
+        }
+    }
+
+    if (centerPixels === 0) {
+        return 0;
+    }
+
+    const redCenterRatio =
+        redCenterPixels / centerPixels;
+
+    return Math.max(
+        0,
+        Math.min(
+            1,
+            1 - redCenterRatio * 3
+        )
+    );
+}
+
+function calculateTriangleProfileScore(box, mask, width) {
+    // A triangle changes width across rows more than a rectangle does.
+
+    const buckets = new Array(10).fill(0);
+
+    for (let y = box.y; y < box.y + box.height; y += 1) {
+        for (let x = box.x; x < box.x + box.width; x += 1) {
+            if (mask[y * width + x] === 1) {
+                const bucket = Math.min(
+                    9,
+                    Math.floor((y - box.y) / box.height * 10)
+                );
+
+                buckets[bucket] += 1;
+            }
+        }
+    }
+
+    const total = buckets.reduce(
         function(sum, value) {
             return sum + value;
         },
@@ -482,57 +632,77 @@ function calculateTriangleProfileScore(rowBuckets) {
         return 0;
     }
 
-    const mean =
-        total / rowBuckets.length;
+    const mean = total / buckets.length;
 
     let variance = 0;
 
-    rowBuckets.forEach(function(value) {
+    buckets.forEach(function(value) {
         variance += Math.pow(value - mean, 2);
     });
 
-    variance =
-        variance / rowBuckets.length;
-
-    const standardDeviation =
-        Math.sqrt(variance);
+    variance = variance / buckets.length;
 
     const variation =
-        standardDeviation / Math.max(mean, 1);
+        Math.sqrt(variance) / Math.max(mean, 1);
 
     return Math.max(
         0,
         Math.min(
             1,
-            variation / 1.4
+            variation / 1.25
         )
     );
 }
 
-function drawDetectionOverlay(context, result) {
-    // Draw a box around the detected red marker area.
-    // This makes testing easier.
+function updateStability(box) {
+    // Increase stability if the candidate box stays in roughly the same place.
 
-    if (!result.box) {
+    if (!lastBestBox) {
+        stableMarkerFrames = 1;
+        lastBestBox = box;
         return;
     }
 
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+
+    const lastCenterX = lastBestBox.x + lastBestBox.width / 2;
+    const lastCenterY = lastBestBox.y + lastBestBox.height / 2;
+
+    const movement =
+        Math.hypot(
+            centerX - lastCenterX,
+            centerY - lastCenterY
+        );
+
+    if (movement < 22) {
+        stableMarkerFrames += 1;
+    } else {
+        stableMarkerFrames = 1;
+    }
+
+    lastBestBox = box;
+}
+
+function drawCandidateOverlay(context, box, confidence, confirmed) {
+    // Draw scanner overlay.
+
     context.lineWidth = 3;
-    context.strokeStyle = "lime";
+    context.strokeStyle = confirmed ? "#74f79b" : "#ffd166";
 
     context.strokeRect(
-        result.box.x,
-        result.box.y,
-        result.box.width,
-        result.box.height
+        box.x,
+        box.y,
+        box.width,
+        box.height
     );
 
-    context.font = "14px Arial";
-    context.fillStyle = "lime";
+    context.font = "bold 16px Arial";
+    context.fillStyle = confirmed ? "#74f79b" : "#ffd166";
 
     context.fillText(
-        result.confidence + "%",
-        result.box.x,
-        Math.max(16, result.box.y - 6)
+        confidence + "%",
+        box.x,
+        Math.max(18, box.y - 6)
     );
 }
