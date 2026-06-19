@@ -1,108 +1,149 @@
 // ==================================================
-// Quest Compass Main Application
+// Quest Compass Main App
 // ==================================================
 //
 // This file controls:
+// - app modes
 // - GPS
 // - compass permission
-// - phone heading
-// - UI updates
-// - saved locations
-// - navigation target selection
-// - camera marker start button
-//
-// Storage logic lives in storage.js.
-// Navigation math lives in navigation.js.
-// Camera detection lives in camera.js.
+// - status chips
+// - navigation target
+// - create form
+// - saved location library
+// - scanner UI
 
 let currentLatitude = null;
 let currentLongitude = null;
 let currentAccuracy = null;
 
-let activeTarget = null;
 let phoneHeading = null;
+let activeTarget = null;
 
-const statusElement =
-    document.getElementById("status");
+let gpsActive = false;
+let compassActive = false;
+let scannerActive = false;
 
-const coordsElement =
-    document.getElementById("coords");
+const modeSubtitle = document.getElementById("modeSubtitle");
 
-const compassStatusElement =
-    document.getElementById("compassStatus");
+const gpsChip = document.getElementById("gpsChip");
+const compassChip = document.getElementById("compassChip");
+const scannerChip = document.getElementById("scannerChip");
+const targetChip = document.getElementById("targetChip");
 
-const headingInfoElement =
-    document.getElementById("headingInfo");
+const gpsChipText = document.getElementById("gpsChipText");
+const compassChipText = document.getElementById("compassChipText");
+const scannerChipText = document.getElementById("scannerChipText");
+const targetChipText = document.getElementById("targetChipText");
 
-const targetInfoElement =
-    document.getElementById("targetInfo");
+const gpsReadout = document.getElementById("gpsReadout");
+const headingReadout = document.getElementById("headingReadout");
+const navigationReadout = document.getElementById("navigationReadout");
+const createGpsReadout = document.getElementById("createGpsReadout");
 
-const navigationInfoElement =
-    document.getElementById("navigationInfo");
+const directionArrow = document.getElementById("directionArrow");
+const bearingReadout = document.getElementById("bearingReadout");
 
-const directionArrowElement =
-    document.getElementById("directionArrow");
+const trailTargetName = document.getElementById("trailTargetName");
+const trailTargetHint = document.getElementById("trailTargetHint");
+const trailDistance = document.getElementById("trailDistance");
+const trailAccuracy = document.getElementById("trailAccuracy");
 
-const markerStatusElement =
-    document.getElementById("markerStatus");
+const scanTargetName = document.getElementById("scanTargetName");
+const scanTargetMeta = document.getElementById("scanTargetMeta");
 
-const cameraVideoElement =
-    document.getElementById("cameraVideo");
+const placeNameInput = document.getElementById("placeNameInput");
+const hintInput = document.getElementById("hintInput");
 
-const cameraCanvasElement =
-    document.getElementById("cameraCanvas");
+const cameraVideo = document.getElementById("cameraVideo");
+const cameraCanvas = document.getElementById("cameraCanvas");
 
-document
-    .getElementById("gpsButton")
-    .addEventListener(
-        "click",
-        enableGPS
-    );
+const markerTitle = document.getElementById("markerTitle");
+const markerMessage = document.getElementById("markerMessage");
 
-document
-    .getElementById("saveButton")
-    .addEventListener(
-        "click",
-        saveCurrentLocation
-    );
+const redSignalBar = document.getElementById("redSignalBar");
+const shapeMatchBar = document.getElementById("shapeMatchBar");
+const lightingBar = document.getElementById("lightingBar");
+const stabilityBar = document.getElementById("stabilityBar");
 
-document
-    .getElementById("clearButton")
-    .addEventListener(
-        "click",
-        clearAllLocations
-    );
+const redSignalText = document.getElementById("redSignalText");
+const shapeMatchText = document.getElementById("shapeMatchText");
+const lightingText = document.getElementById("lightingText");
+const stabilityText = document.getElementById("stabilityText");
 
-document
-    .getElementById("compassButton")
-    .addEventListener(
-        "click",
-        enableCompass
-    );
+document.querySelectorAll(".navButton").forEach(function(button) {
+    button.addEventListener("click", function() {
+        setMode(button.dataset.mode);
+    });
+});
 
-document
-    .getElementById("cameraButton")
-    .addEventListener(
-        "click",
-        function() {
-            startCameraMarkerDetection(
-                cameraVideoElement,
-                cameraCanvasElement,
-                markerStatusElement
-            );
-        }
-    );
+document.getElementById("trailGpsButton").addEventListener("click", enableGPS);
+document.getElementById("trailCompassButton").addEventListener("click", enableCompass);
+
+document.getElementById("trailScannerButton").addEventListener("click", function() {
+    setMode("scan");
+});
+
+document.getElementById("trailSaveButton").addEventListener("click", function() {
+    setMode("create");
+});
+
+document.getElementById("scanCameraButton").addEventListener("click", enableScanner);
+
+document.getElementById("createSaveButton").addEventListener("click", function() {
+    savePlace(false);
+});
+
+document.getElementById("createSaveFollowButton").addEventListener("click", function() {
+    savePlace(true);
+});
+
+document.getElementById("clearButton").addEventListener("click", clearAllSavedLocations);
+
+function setMode(mode) {
+    // Switch between Trail, Scan, Create, and Library.
+
+    document.querySelectorAll(".modePanel").forEach(function(panel) {
+        panel.classList.remove("activePanel");
+    });
+
+    document.querySelectorAll(".navButton").forEach(function(button) {
+        button.classList.remove("activeNav");
+    });
+
+    document.getElementById(mode + "Panel").classList.add("activePanel");
+
+    document
+        .querySelector("[data-mode='" + mode + "']")
+        .classList
+        .add("activeNav");
+
+    if (mode === "trail") {
+        modeSubtitle.textContent = "Trail Active";
+    }
+
+    if (mode === "scan") {
+        modeSubtitle.textContent = "Sigil Scan";
+    }
+
+    if (mode === "create") {
+        modeSubtitle.textContent = "Forge Quest";
+    }
+
+    if (mode === "library") {
+        modeSubtitle.textContent = "Field Notes";
+        renderLocations();
+    }
+}
 
 function enableGPS() {
-    // watchPosition keeps updating as the user moves.
-    // This is better for navigation than one-time GPS.
+    // Start live GPS tracking.
 
     if (!navigator.geolocation) {
-        alert("GPS is not supported on this device.");
+        gpsReadout.textContent = "GPS is not supported on this device.";
         return;
     }
 
-    statusElement.textContent = "Requesting GPS...";
+    gpsReadout.textContent = "Requesting GPS permission...";
 
     navigator.geolocation.watchPosition(
         function(position) {
@@ -110,24 +151,18 @@ function enableGPS() {
             currentLongitude = position.coords.longitude;
             currentAccuracy = position.coords.accuracy;
 
-            statusElement.textContent = "GPS Active";
-            statusElement.className = "active";
+            gpsActive = true;
 
-            coordsElement.innerHTML =
-                `
-                Latitude: ${currentLatitude}<br>
-                Longitude: ${currentLongitude}<br>
-                Accuracy: ${Math.round(currentAccuracy)} meters
-                `;
-
+            updateStatusChips();
+            updateGpsReadouts();
             updateNavigationDisplay();
+            renderLocations();
         },
 
         function(error) {
-            statusElement.textContent =
-                "GPS Error: " + error.message;
-
-            statusElement.className = "error";
+            gpsReadout.textContent = "GPS Error: " + error.message;
+            gpsActive = false;
+            updateStatusChips();
         },
 
         {
@@ -139,8 +174,7 @@ function enableGPS() {
 }
 
 function enableCompass() {
-    // iPhone Safari requires permission for compass/orientation sensors.
-    // Android and some browsers may not require the same permission call.
+    // iPhone Safari requires permission for orientation sensors.
 
     if (
         typeof DeviceOrientationEvent !== "undefined" &&
@@ -151,17 +185,11 @@ function enableCompass() {
                 if (permissionState === "granted") {
                     startCompassListener();
                 } else {
-                    compassStatusElement.textContent =
-                        "Compass permission denied.";
-
-                    compassStatusElement.className = "error";
+                    headingReadout.textContent = "Compass permission denied.";
                 }
             })
             .catch(function(error) {
-                compassStatusElement.textContent =
-                    "Compass error: " + error.message;
-
-                compassStatusElement.className = "error";
+                headingReadout.textContent = "Compass error: " + error.message;
             });
 
         return;
@@ -171,269 +199,337 @@ function enableCompass() {
 }
 
 function startCompassListener() {
-    // deviceorientation fires when the phone orientation changes.
+    // Listen for phone heading changes.
 
-    compassStatusElement.textContent = "Compass active.";
-    compassStatusElement.className = "active";
+    compassActive = true;
+
+    updateStatusChips();
 
     window.addEventListener(
         "deviceorientation",
         handleDeviceOrientation,
         true
     );
+
+    headingReadout.textContent = "Compass active. Rotate phone to update heading.";
 }
 
 function handleDeviceOrientation(event) {
-    // iPhone Safari provides webkitCompassHeading.
-    // Other browsers may provide alpha.
-    //
-    // webkitCompassHeading:
-    // 0 = north, 90 = east, 180 = south, 270 = west.
-    //
-    // alpha usually rotates opposite, so we convert it.
+    // iPhone gives webkitCompassHeading.
+    // Other devices may use alpha.
 
     if (typeof event.webkitCompassHeading === "number") {
         phoneHeading = event.webkitCompassHeading;
     } else if (typeof event.alpha === "number") {
         phoneHeading = normalizeDegrees(360 - event.alpha);
     } else {
-        headingInfoElement.textContent =
-            "Phone heading: unavailable";
-
+        headingReadout.textContent = "Phone heading unavailable.";
         return;
     }
 
-    headingInfoElement.innerHTML =
-        "Phone heading: " +
-        Math.round(phoneHeading) +
-        "°";
+    headingReadout.textContent =
+        "Phone heading: " + Math.round(phoneHeading) + "°";
 
     updateNavigationDisplay();
 }
 
-function saveCurrentLocation() {
-    // Prevent saving before GPS exists.
+function enableScanner() {
+    // Start camera marker scanner.
+
+    scannerActive = true;
+
+    updateStatusChips();
+
+    startCameraMarkerDetection(
+        cameraVideo,
+        cameraCanvas,
+        updateScannerUI
+    );
+}
+
+function updateScannerUI(result) {
+    // Update scanner status and bars from camera.js result.
+
+    markerTitle.textContent = result.title;
+    markerMessage.textContent = result.message;
+
+    updateBar(redSignalBar, redSignalText, result.redSignal);
+    updateBar(shapeMatchBar, shapeMatchText, result.shapeMatch);
+    updateBar(lightingBar, lightingText, result.lighting);
+    updateBar(stabilityBar, stabilityText, result.stability);
+
+    scannerChipText.textContent = result.confirmed ? "Confirmed" : "Active";
+}
+
+function updateBar(barElement, textElement, value) {
+    // Update one scanner meter.
+
+    const safeValue = Math.max(
+        0,
+        Math.min(
+            100,
+            Math.round(value || 0)
+        )
+    );
+
+    barElement.style.width = safeValue + "%";
+    textElement.textContent = safeValue + "%";
+}
+
+function updateStatusChips() {
+    // Update compact top status pills.
+
+    gpsChip.classList.toggle("active", gpsActive);
+    compassChip.classList.toggle("active", compassActive);
+    scannerChip.classList.toggle("active", scannerActive);
+    targetChip.classList.toggle("active", activeTarget !== null);
+
+    gpsChipText.textContent = gpsActive ? "Active" : "Off";
+    compassChipText.textContent = compassActive ? "Calibrated" : "Off";
+    scannerChipText.textContent = scannerActive ? scannerChipText.textContent || "Active" : "Off";
+    targetChipText.textContent = activeTarget ? "Locked" : "None";
+}
+
+function updateGpsReadouts() {
+    // Display current GPS data in Trail and Create.
+
+    if (!gpsActive) {
+        gpsReadout.textContent = "GPS inactive.";
+        createGpsReadout.textContent = "Enable GPS to capture this place.";
+        return;
+    }
+
+    const text =
+        "Latitude: " + currentLatitude +
+        "<br>Longitude: " + currentLongitude +
+        "<br>Accuracy: " + Math.round(currentAccuracy) + " m";
+
+    gpsReadout.innerHTML = text;
+    createGpsReadout.innerHTML = text;
+}
+
+function savePlace(shouldFollow) {
+    // Save a location from the Create screen.
 
     if (!currentLatitude || !currentLongitude) {
         alert("Enable GPS first.");
         return;
     }
 
-    const locationName =
-        prompt("Name this location:");
+    const name = placeNameInput.value.trim();
 
-    if (!locationName) {
+    if (!name) {
+        alert("Name this place first.");
         return;
     }
 
-    addLocation({
-        name: locationName,
+    const newLocation = {
+        name: name,
+        hint: hintInput.value.trim(),
         latitude: currentLatitude,
         longitude: currentLongitude,
         accuracy: currentAccuracy,
         createdAt: new Date().toISOString()
-    });
+    };
+
+    addLocation(newLocation);
+
+    placeNameInput.value = "";
+    hintInput.value = "";
 
     renderLocations();
+
+    if (shouldFollow) {
+        const locations = loadLocations();
+        activeTarget = locations[locations.length - 1];
+        updateStatusChips();
+        updateNavigationDisplay();
+        setMode("trail");
+        return;
+    }
+
+    setMode("library");
 }
 
 function renderLocations() {
-    // Draw saved locations onto the page.
+    // Render saved locations in Library.
 
-    const container =
-        document.getElementById("savedLocations");
+    const container = document.getElementById("savedLocations");
 
-    const locations =
-        loadLocations();
+    const locations = loadLocations();
 
     container.innerHTML = "";
 
     if (locations.length === 0) {
         container.innerHTML =
-            "<p class='smallText'>No saved locations yet.</p>";
+            "<div class='locationCard'><h3>No saved places yet.</h3><p>Use Create to save your first location.</p></div>";
 
         return;
     }
 
     locations.forEach(function(location) {
-        const card =
-            document.createElement("div");
+        const card = document.createElement("div");
 
         card.className = "locationCard";
 
-        const title =
-            document.createElement("h3");
+        const distanceText = getDistanceTextForLocation(location);
 
-        title.textContent = location.name;
+        card.innerHTML =
+            "<h3>" + escapeHTML(location.name) + "</h3>" +
+            "<p>" +
+            "Lat: " + location.latitude + "<br>" +
+            "Lng: " + location.longitude + "<br>" +
+            "Saved Accuracy: " + Math.round(location.accuracy) + " m<br>" +
+            distanceText +
+            "</p>" +
+            "<div class='locationActions'>" +
+            "<button class='followButton'>Follow</button>" +
+            "<button class='deleteButton'>Delete</button>" +
+            "</div>";
 
-        const details =
-            document.createElement("p");
+        card.querySelector(".followButton").addEventListener("click", function() {
+            activeTarget = location;
+            updateStatusChips();
+            updateNavigationDisplay();
+            setMode("trail");
+        });
 
-        details.innerHTML =
-            `
-            Lat: ${location.latitude}<br>
-            Lng: ${location.longitude}<br>
-            Accuracy: ${Math.round(location.accuracy)}m
-            `;
+        card.querySelector(".deleteButton").addEventListener("click", function() {
+            deleteLocationById(location.id);
 
-        const navigateButton =
-            document.createElement("button");
-
-        navigateButton.textContent = "Navigate";
-        navigateButton.className = "navigateButton";
-
-        navigateButton.addEventListener(
-            "click",
-            function() {
-                startNavigation(location.id);
+            if (activeTarget && activeTarget.id === location.id) {
+                activeTarget = null;
+                updateNavigationDisplay();
+                updateStatusChips();
             }
-        );
 
-        const deleteButton =
-            document.createElement("button");
-
-        deleteButton.textContent = "Delete";
-
-        deleteButton.addEventListener(
-            "click",
-            function() {
-                removeLocation(location.id);
-            }
-        );
-
-        card.appendChild(title);
-        card.appendChild(details);
-        card.appendChild(navigateButton);
-        card.appendChild(deleteButton);
+            renderLocations();
+        });
 
         container.appendChild(card);
     });
 }
 
-function startNavigation(locationId) {
-    // Select a saved location as the active target.
+function getDistanceTextForLocation(location) {
+    // Show distance from current position if GPS is active.
 
-    const locations =
-        loadLocations();
+    if (!gpsActive || !currentLatitude || !currentLongitude) {
+        return "Distance: GPS inactive";
+    }
 
-    activeTarget =
-        locations.find(function(location) {
-            return location.id === locationId;
-        });
+    const distance = calculateDistanceMeters(
+        currentLatitude,
+        currentLongitude,
+        location.latitude,
+        location.longitude
+    );
 
-    updateNavigationDisplay();
+    return "Distance: " + formatDistance(distance);
 }
 
 function updateNavigationDisplay() {
-    // If there is no target, there is nothing to calculate.
+    // Update Trail and Scan target cards.
 
     if (!activeTarget) {
+        directionArrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
+        bearingReadout.textContent = "No target";
+
+        trailTargetName.textContent = "No Active Trail";
+        trailTargetHint.textContent = "Choose a saved place from Library.";
+        trailDistance.textContent = "--";
+        trailAccuracy.textContent = "Accuracy unknown";
+
+        scanTargetName.textContent = "No target selected";
+        scanTargetMeta.textContent = "Choose a place from Library.";
+
+        navigationReadout.textContent = "No navigation target selected.";
         return;
     }
+
+    trailTargetName.textContent = activeTarget.name;
+    trailTargetHint.textContent = activeTarget.hint || "Follow the signal.";
+
+    scanTargetName.textContent = activeTarget.name;
+    scanTargetMeta.textContent = "Saved Location";
 
     if (!currentLatitude || !currentLongitude) {
-        targetInfoElement.innerHTML =
-            "<strong>Target:</strong> " + activeTarget.name;
-
-        navigationInfoElement.innerHTML =
-            "Enable GPS to begin navigation.";
-
+        trailDistance.textContent = "--";
+        trailAccuracy.textContent = "Enable GPS";
+        navigationReadout.textContent = "Enable GPS to navigate.";
         return;
     }
 
-    const distance =
-        calculateDistanceMeters(
-            currentLatitude,
-            currentLongitude,
-            activeTarget.latitude,
-            activeTarget.longitude
-        );
+    const distance = calculateDistanceMeters(
+        currentLatitude,
+        currentLongitude,
+        activeTarget.latitude,
+        activeTarget.longitude
+    );
 
-    const targetBearing =
-        calculateBearingDegrees(
-            currentLatitude,
-            currentLongitude,
-            activeTarget.latitude,
-            activeTarget.longitude
-        );
+    const bearing = calculateBearingDegrees(
+        currentLatitude,
+        currentLongitude,
+        activeTarget.latitude,
+        activeTarget.longitude
+    );
 
-    const arrowRotation =
-        calculateArrowRotation(
-            targetBearing,
-            phoneHeading
-        );
+    const arrowRotation = calculateArrowRotation(
+        bearing,
+        phoneHeading
+    );
 
-    const directionLabel =
-        getDirectionLabel(targetBearing);
+    const directionLabel = getDirectionLabel(bearing);
 
-    const arrived =
-        hasArrived(distance);
+    const arrived = hasArrived(distance);
 
-    directionArrowElement.style.transform =
-        "rotate(" + arrowRotation + "deg)";
+    directionArrow.style.transform =
+        "translate(-50%, -50%) rotate(" + arrowRotation + "deg)";
 
-    targetInfoElement.innerHTML =
-        "<strong>Target:</strong> " + activeTarget.name;
+    bearingReadout.textContent =
+        directionLabel + " " + Math.round(bearing) + "°";
 
-    navigationInfoElement.innerHTML =
-        `
-        Distance: ${formatDistance(distance)}<br>
-        Map Direction: ${directionLabel}<br>
-        Target Bearing: ${Math.round(targetBearing)}°<br>
-        Phone Heading: ${
-            phoneHeading === null
-                ? "not enabled"
-                : Math.round(phoneHeading) + "°"
-        }<br>
-        Arrow Mode: ${
-            phoneHeading === null
-                ? "map-relative"
-                : "phone-relative"
-        }<br>
-        Status: ${arrived ? "Arrived 🎯" : "Move toward target"}
-        `;
+    trailDistance.textContent = formatDistance(distance);
+
+    trailAccuracy.textContent =
+        "GPS ±" + Math.round(currentAccuracy || 0) + " m";
+
+    navigationReadout.innerHTML =
+        "Target: " + escapeHTML(activeTarget.name) +
+        "<br>Distance: " + formatDistance(distance) +
+        "<br>Map Direction: " + directionLabel +
+        "<br>Target Bearing: " + Math.round(bearing) + "°" +
+        "<br>Phone Heading: " + (phoneHeading === null ? "not enabled" : Math.round(phoneHeading) + "°") +
+        "<br>Status: " + (arrived ? "Discovery reached 🎯" : "Move toward target");
 }
 
-function removeLocation(locationId) {
-    // Delete selected location.
+function clearAllSavedLocations() {
+    // Delete all saved locations after confirmation.
 
-    deleteLocationById(locationId);
-
-    if (activeTarget && activeTarget.id === locationId) {
-        activeTarget = null;
-
-        targetInfoElement.innerHTML =
-            "No target selected.";
-
-        navigationInfoElement.innerHTML =
-            "Choose a saved location to navigate.";
-
-        directionArrowElement.style.transform =
-            "rotate(0deg)";
+    if (!confirm("Clear all saved locations?")) {
+        return;
     }
 
+    clearLocations();
+
+    activeTarget = null;
+
+    updateStatusChips();
+    updateNavigationDisplay();
     renderLocations();
 }
 
-function clearAllLocations() {
-    // Confirm before deleting everything.
+function escapeHTML(text) {
+    // Prevent user-entered names from becoming HTML.
 
-    if (confirm("Delete all saved locations?")) {
-        clearLocations();
-
-        activeTarget = null;
-
-        targetInfoElement.innerHTML =
-            "No target selected.";
-
-        navigationInfoElement.innerHTML =
-            "Choose a saved location to navigate.";
-
-        directionArrowElement.style.transform =
-            "rotate(0deg)";
-
-        renderLocations();
-    }
+    return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
+updateStatusChips();
+updateGpsReadouts();
+updateNavigationDisplay();
 renderLocations();
