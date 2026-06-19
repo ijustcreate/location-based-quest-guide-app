@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Quest Compass</title>
+
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+
+    min-height:100vh;
+    text-align:center;
+}
+
+h1{
+    margin-bottom:10px;
+}
+
+button{
+    padding:16px 24px;
+    font-size:18px;
+    border:none;
+    border-radius:12px;
+    cursor:pointer;
+}
+
+.card{
+    background:#1e1e1e;
+    padding:20px;
+    border-radius:16px;
+    margin-top:20px;
+    width:90%;
+    max-width:500px;
+}
+
+#coords{
+    word-break:break-word;
+}
+
+#status{
+    color:#9ae6b4;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🧭 Quest Compass</h1>
+
+<p>
+Version 0.1
+</p>
+
+<button onclick="startGPS()">
+Enable GPS
+</button>
+
+<div class="card">
+
+<h3>Status</h3>
+
+<div id="status">
+Waiting for GPS...
+</div>
+
+<hr>
+
+<h3>Your Coordinates</h3>
+
+<div id="coords">
+Not available
+</div>
+
+</div>
+
+<script>
+
+function startGPS(){
+
+    if(!navigator.geolocation){
+
+        document.getElementById("status").innerText =
+        "Geolocation not supported.";
+
+        return;
+    }
+
+    document.getElementById("status").innerText =
+    "Requesting GPS...";
+
+    navigator.geolocation.watchPosition(
+
+        function(position){
+
+            let lat = position.coords.latitude;
+            let lng = position.coords.longitude;
+
+            document.getElementById("status").innerText =
+            "GPS Active";
+
+            document.getElementById("coords").innerHTML =
+            "Latitude: " + lat +
+            "<br><br>" +
+            "Longitude: " + lng;
+        },
+
+        function(error){
+
+            document.getElementById("status").innerText =
+            "GPS Error: " + error.message;
+        },
+
+        {
+            enableHighAccuracy:true
+        }
+
+    );
+}
+
+</script>
+
+</body>
+</html>
