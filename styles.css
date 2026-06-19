@@ -2,7 +2,6 @@
    Quest Compass Styles
    ================================================== */
 
-/* Page basics */
 body {
     background: #0d0d18;
     color: white;
@@ -11,18 +10,15 @@ body {
     padding: 20px;
 }
 
-/* Main content wrapper */
 .container {
     max-width: 900px;
     margin: auto;
 }
 
-/* Version text under the title */
 .version {
     opacity: 0.7;
 }
 
-/* Main cards */
 .card {
     background: #1a1a28;
     border-radius: 18px;
@@ -31,7 +27,6 @@ body {
     border: 1px solid rgba(255,255,255,0.08);
 }
 
-/* Normal buttons */
 button {
     width: 100%;
     margin-top: 12px;
@@ -42,47 +37,79 @@ button {
     font-size: 16px;
 }
 
-/* Red delete/destructive buttons */
 .danger {
     background: darkred;
     color: white;
 }
 
-/* Saved location card */
 .locationCard {
     background: #11111a;
-    padding: 12px;
-    margin-top: 12px;
-    border-radius: 12px;
+    padding: 14px;
+    margin-top: 14px;
+    border-radius: 14px;
 }
 
-/* Green GPS status */
 .active {
     color: lightgreen;
 }
 
-/* Navigation arrow */
-#directionArrow {
-    font-size: 90px;
-    text-align: center;
-    margin: 20px 0;
-    transition: transform 0.3s ease;
+.warning {
+    color: #ffd166;
 }
 
-/* Navigation text */
-#navigationInfo,
-#targetInfo,
-#coords {
-    line-height: 1.5;
+.error {
+    color: #ff6b6b;
 }
 
-/* Navigate buttons */
 .navigateButton {
     background: #2d4cff;
     color: white;
 }
 
-/* Small helper text */
 .smallText {
     opacity: 0.75;
+}
+
+#directionArrow {
+    font-size: 96px;
+    text-align: center;
+    margin: 24px 0;
+    transition: transform 0.25s ease;
+}
+
+#coords,
+#headingInfo,
+#navigationInfo,
+#targetInfo,
+#markerStatus {
+    line-height: 1.5;
+}
+
+#cameraVideo {
+    width: 100%;
+    margin-top: 14px;
+    border-radius: 16px;
+    display: none;
+    background: black;
+}
+
+#cameraCanvas {
+    width: 100%;
+    margin-top: 14px;
+    border-radius: 16px;
+    display: none;
+    background: black;
+}
+
+.markerFound {
+    color: lightgreen;
+    font-weight: bold;
+}
+
+.markerSearching {
+    color: #ffd166;
+}
+
+.markerLost {
+    color: #ff6b6b;
 }
