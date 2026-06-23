@@ -24,7 +24,8 @@ const appState = {
         frameStability: 0,
         lockConfidence: 0,
         lockedAt: null,
-        error: null
+        error: null,
+        signalReadySince: null
     },
     target: {
         savedPlaceId: null
@@ -33,9 +34,31 @@ const appState = {
 
 let activeTarget = null;
 let selectedLibraryLocationId = null;
+let currentSettings = loadSettings();
+let currentUser = getCurrentUser();
+let attuneSignalStartedAt = null;
+let attuneHoldStartedAt = null;
+let attuneHoldTimer = null;
+let attuneCompleted = false;
 
 const modeSubtitle = document.getElementById("modeSubtitle");
 const headerLocationSelect = document.getElementById("headerLocationSelect");
+const landingGate = document.getElementById("landingGate");
+const foundSymbolButton = document.getElementById("foundSymbolButton");
+const enterSiteButton = document.getElementById("enterSiteButton");
+const authForm = document.getElementById("authForm");
+const usernameInput = document.getElementById("usernameInput");
+const passwordInput = document.getElementById("passwordInput");
+const authMessage = document.getElementById("authMessage");
+const accountName = document.getElementById("accountName");
+const accountResources = document.getElementById("accountResources");
+const settingsButton = document.getElementById("settingsButton");
+const settingsPanel = document.getElementById("settingsPanel");
+const closeSettingsButton = document.getElementById("closeSettingsButton");
+const saveSettingsButton = document.getElementById("saveSettingsButton");
+const resetLandingButton = document.getElementById("resetLandingButton");
+const settingsAccountStats = document.getElementById("settingsAccountStats");
+const popularQuestStats = document.getElementById("popularQuestStats");
 
 const gpsChip = document.getElementById("gpsChip");
 const compassChip = document.getElementById("compassChip");
@@ -65,6 +88,11 @@ const scanTargetMeta = document.getElementById("scanTargetMeta");
 
 const placeNameInput = document.getElementById("placeNameInput");
 const hintInput = document.getElementById("hintInput");
+const questNameInput = document.getElementById("questNameInput");
+const clueInput = document.getElementById("clueInput");
+const clueAnswerInput = document.getElementById("clueAnswerInput");
+const rewardTextInput = document.getElementById("rewardTextInput");
+const chainNextLocationSelect = document.getElementById("chainNextLocationSelect");
 
 const cameraVideo = document.getElementById("cameraVideo");
 const cameraCanvas = document.getElementById("cameraCanvas");
@@ -88,6 +116,9 @@ const modalOverlay = document.getElementById("modalOverlay");
 const modalTitle = document.getElementById("modalTitle");
 const modalMessage = document.getElementById("modalMessage");
 const modalActions = document.getElementById("modalActions");
+const attunePrompt = document.getElementById("attunePrompt");
+const attuneButton = document.getElementById("attuneButton");
+const attuneMeterFill = document.getElementById("attuneMeterFill");
 
 document.querySelectorAll(".navButton").forEach(function(button) {
     button.addEventListener("click", function() {
@@ -137,6 +168,47 @@ headerLocationSelect.addEventListener("change", function() {
     selectedLibraryLocationId = headerLocationSelect.value || null;
     renderLocations();
 });
+
+settingsButton.addEventListener("click", function() {
+    settingsPanel.hidden = !settingsPanel.hidden;
+    renderSettingsPanel();
+});
+
+closeSettingsButton.addEventListener("click", function() {
+    settingsPanel.hidden = true;
+});
+
+saveSettingsButton.addEventListener("click", saveSettingsFromPanel);
+
+resetLandingButton.addEventListener("click", function() {
+    currentSettings.showLandingOnOpen = true;
+    saveSettings(currentSettings);
+    landingGate.hidden = false;
+});
+
+foundSymbolButton.addEventListener("click", function() {
+    enterApp();
+    setMode("scan");
+
+    if (currentSettings.autoStartScanner) {
+        enableScanner();
+    }
+});
+
+enterSiteButton.addEventListener("click", function() {
+    authForm.hidden = !authForm.hidden;
+    usernameInput.focus();
+});
+
+authForm.addEventListener("submit", function(event) {
+    event.preventDefault();
+    handleAuthSubmit();
+});
+
+attuneButton.addEventListener("pointerdown", startAttuneHold);
+attuneButton.addEventListener("pointerup", cancelAttuneHold);
+attuneButton.addEventListener("pointerleave", cancelAttuneHold);
+attuneButton.addEventListener("pointercancel", cancelAttuneHold);
 
 modalOverlay.addEventListener("click", function(event) {
     if (event.target === modalOverlay) {
@@ -196,7 +268,7 @@ function enableGPS() {
             renderAppState();
         },
         {
-            enableHighAccuracy: true,
+            enableHighAccuracy: currentSettings.highAccuracyGps,
             maximumAge: 0,
             timeout: 15000
         }
@@ -257,6 +329,10 @@ function handleDeviceOrientation(event) {
 
 function enableScanner() {
     appState.scanner.status = "searching";
+    attuneCompleted = false;
+    attuneSignalStartedAt = null;
+    attunePrompt.hidden = true;
+    attuneMeterFill.style.width = "0%";
     renderAppState();
 
     startCameraMarkerDetection(
@@ -286,6 +362,7 @@ function updateScannerUI(result) {
     updateBar(lightQualityBar, lightQualityText, appState.scanner.lightQuality);
     updateBar(frameStabilityBar, frameStabilityText, appState.scanner.frameStability);
     updateBar(confidenceBar, confidenceText, appState.scanner.lockConfidence);
+    updateAttuneAvailability();
 
     renderAppState();
 }
@@ -301,6 +378,7 @@ function renderAppState() {
     modeSubtitle.textContent = getHeaderSubtitle();
     modeSubtitle.hidden = appState.activeTab === "library";
     headerLocationSelect.hidden = appState.activeTab !== "library";
+    renderAccountBar();
     renderStatusChips();
     renderGpsReadouts();
     renderCompassReadout();
@@ -445,6 +523,11 @@ function savePlace(shouldFollow) {
     const newLocation = {
         name: name,
         hint: hintInput.value.trim(),
+        clue: clueInput.value.trim() || hintInput.value.trim(),
+        clueAnswer: clueAnswerInput.value.trim(),
+        rewardText: rewardTextInput.value.trim(),
+        questName: questNameInput.value.trim() || "Field Quest",
+        chainNextLocationId: chainNextLocationSelect.value || "",
         latitude: appState.gps.latitude,
         longitude: appState.gps.longitude,
         accuracy: appState.gps.accuracyMeters,
@@ -457,6 +540,11 @@ function savePlace(shouldFollow) {
 
     placeNameInput.value = "";
     hintInput.value = "";
+    clueInput.value = "";
+    clueAnswerInput.value = "";
+    rewardTextInput.value = "";
+    questNameInput.value = "";
+    chainNextLocationSelect.value = "";
 
     renderLocations();
 
@@ -475,6 +563,7 @@ function renderLocations() {
     const locations = loadLocations();
 
     renderLibrarySelect(locations);
+    renderChainSelect(locations);
 
     container.innerHTML = "";
 
@@ -526,26 +615,280 @@ function renderLibrarySelect(locations) {
     headerLocationSelect.value = selectedLibraryLocationId;
 }
 
+function renderChainSelect(locations) {
+    chainNextLocationSelect.innerHTML = "<option value=''>No next location yet</option>";
+
+    locations.forEach(function(location) {
+        const option = document.createElement("option");
+
+        option.value = location.id;
+        option.textContent = location.name;
+        chainNextLocationSelect.appendChild(option);
+    });
+}
+
+function enterApp() {
+    landingGate.hidden = true;
+    currentSettings.showLandingOnOpen = false;
+    saveSettings(currentSettings);
+    renderAppState();
+}
+
+function handleAuthSubmit() {
+    const result = loginOrCreateAccount(usernameInput.value, passwordInput.value);
+
+    authMessage.textContent = result.message;
+    authMessage.classList.toggle("error", !result.ok);
+
+    if (!result.ok) {
+        return;
+    }
+
+    currentUser = result.user;
+    enterApp();
+    renderLocations();
+    renderAppState();
+}
+
+function renderAccountBar() {
+    currentUser = getCurrentUser();
+
+    if (!currentUser) {
+        accountName.textContent = "Guest";
+        accountResources.textContent = "R1 0 - R2 0 - R3 0 - R4 0";
+        return;
+    }
+
+    accountName.textContent = currentUser.username + " · " + currentUser.points + " pts";
+    accountResources.textContent =
+        "R1 " + currentUser.resources.resource1 +
+        " - R2 " + currentUser.resources.resource2 +
+        " - R3 " + currentUser.resources.resource3 +
+        " - R4 " + currentUser.resources.resource4;
+}
+
+function renderSettingsPanel() {
+    document.getElementById("settingHighAccuracyGps").checked = currentSettings.highAccuracyGps;
+    document.getElementById("settingAutoStartScanner").checked = currentSettings.autoStartScanner;
+    document.getElementById("settingSoundCues").checked = currentSettings.soundCues;
+    document.getElementById("settingHapticCues").checked = currentSettings.hapticCues;
+    document.getElementById("settingShowTechnicalDetails").checked = currentSettings.showTechnicalDetails;
+    document.getElementById("settingHideExactCoordinates").checked = currentSettings.hideExactCoordinates;
+    document.getElementById("settingScannerSensitivity").value = currentSettings.scannerSensitivity;
+    document.getElementById("settingAttuneThreshold").value = currentSettings.attuneThreshold;
+    document.getElementById("settingRewardResource1").value = currentSettings.rewardResource1;
+    document.getElementById("settingRewardResource2").value = currentSettings.rewardResource2;
+
+    renderAccountBar();
+
+    if (currentUser) {
+        settingsAccountStats.innerHTML =
+            "<p><strong>" + escapeHTML(currentUser.username) + "</strong></p>" +
+            "<p>Points: " + currentUser.points + "</p>" +
+            "<p>Created: " + currentUser.createdLocationIds.length + " · Unlocked: " + currentUser.unlockedLocationIds.length + "</p>" +
+            "<p>Captures: " + currentUser.captureHistory.length + " · Visits: " + currentUser.visitHistory.length + "</p>";
+    } else {
+        settingsAccountStats.textContent = "No account signed in.";
+    }
+
+    const popular = getPopularQuestStats().slice(0, 6);
+
+    popularQuestStats.innerHTML = popular.length === 0 ?
+        "<p>No captures yet.</p>" :
+        popular.map(function(stat, index) {
+            return "<p>" + (index + 1) + ". <strong>" + escapeHTML(stat.locationName) + "</strong><br>" +
+                escapeHTML(stat.questName) + " · " + stat.points + " pts · " + stat.captures + " captures</p>";
+        }).join("");
+}
+
+function saveSettingsFromPanel() {
+    currentSettings = Object.assign(
+        {},
+        currentSettings,
+        {
+            highAccuracyGps: document.getElementById("settingHighAccuracyGps").checked,
+            autoStartScanner: document.getElementById("settingAutoStartScanner").checked,
+            soundCues: document.getElementById("settingSoundCues").checked,
+            hapticCues: document.getElementById("settingHapticCues").checked,
+            showTechnicalDetails: document.getElementById("settingShowTechnicalDetails").checked,
+            hideExactCoordinates: document.getElementById("settingHideExactCoordinates").checked,
+            scannerSensitivity: document.getElementById("settingScannerSensitivity").value,
+            attuneThreshold: Number(document.getElementById("settingAttuneThreshold").value || 75),
+            rewardResource1: Number(document.getElementById("settingRewardResource1").value || 0),
+            rewardResource2: Number(document.getElementById("settingRewardResource2").value || 0)
+        }
+    );
+
+    saveSettings(currentSettings);
+    renderSettingsPanel();
+}
+
+function updateAttuneAvailability() {
+    const threshold = Number(currentSettings.attuneThreshold || 75);
+    const signalSeconds = Number(currentSettings.attuneSignalSeconds || 3);
+    const confidenceReady = appState.scanner.lockConfidence >= threshold;
+
+    if (!confidenceReady || attuneCompleted) {
+        attuneSignalStartedAt = null;
+        attunePrompt.hidden = true;
+        cancelAttuneHold();
+        return;
+    }
+
+    if (attuneSignalStartedAt === null) {
+        attuneSignalStartedAt = Date.now();
+    }
+
+    const readyForMs = Date.now() - attuneSignalStartedAt;
+    attunePrompt.hidden = readyForMs < signalSeconds * 1000;
+}
+
+function startAttuneHold(event) {
+    event.preventDefault();
+
+    if (attunePrompt.hidden || attuneCompleted) {
+        return;
+    }
+
+    attuneHoldStartedAt = Date.now();
+    attuneButton.setPointerCapture?.(event.pointerId);
+
+    if (attuneHoldTimer) {
+        clearInterval(attuneHoldTimer);
+    }
+
+    attuneHoldTimer = setInterval(updateAttuneHold, 50);
+    updateAttuneHold();
+}
+
+function updateAttuneHold() {
+    if (attuneHoldStartedAt === null) {
+        return;
+    }
+
+    const holdMs = Number(currentSettings.attuneHoldSeconds || 3) * 1000;
+    const progress = Math.min(1, (Date.now() - attuneHoldStartedAt) / holdMs);
+
+    attuneMeterFill.style.width = Math.round(progress * 100) + "%";
+
+    if (progress >= 1) {
+        completeAttuneCapture();
+    }
+}
+
+function cancelAttuneHold() {
+    attuneHoldStartedAt = null;
+
+    if (attuneHoldTimer) {
+        clearInterval(attuneHoldTimer);
+        attuneHoldTimer = null;
+    }
+
+    if (!attuneCompleted) {
+        attuneMeterFill.style.width = "0%";
+    }
+}
+
+function completeAttuneCapture() {
+    if (attuneCompleted) {
+        return;
+    }
+
+    attuneCompleted = true;
+    cancelAttuneHold();
+    attuneMeterFill.style.width = "100%";
+    attunePrompt.hidden = true;
+
+    const captureLocation = activeTarget || {
+        id: "unbound-sigil",
+        name: "Unbound Sigil",
+        questName: "Scanner Discovery",
+        chainNextLocationId: "",
+        rewardText: "You captured an unbound symbol."
+    };
+
+    const result = recordLocationCapture(captureLocation);
+    currentUser = getCurrentUser();
+    renderAccountBar();
+    renderLocations();
+    renderSettingsPanel();
+
+    const nextLocation = captureLocation.chainNextLocationId ?
+        loadLocations().find(function(location) {
+            return location.id === captureLocation.chainNextLocationId;
+        }) :
+        null;
+
+    if (nextLocation) {
+        showModal({
+            title: "Captured",
+            message: (captureLocation.rewardText || "You gained one point.") + " Next location: " + nextLocation.name,
+            actions: [
+                {
+                    label: "Follow Next",
+                    className: "primaryButton",
+                    onClick: function() {
+                        hideModal();
+                        setActiveTarget(nextLocation);
+                        setMode("trail");
+                    }
+                },
+                { label: "Stay Here", className: "secondaryButton", onClick: hideModal }
+            ]
+        });
+        return;
+    }
+
+    showModal({
+        title: "Captured",
+        message: (captureLocation.rewardText || "You gained one point.") +
+            " Account points: " + (result && result.user ? result.user.points : 0),
+        actions: [
+            { label: "Nice", className: "primaryButton", onClick: hideModal }
+        ]
+    });
+}
+
 function renderLocationDetail(container, location) {
     const card = document.createElement("div");
     const distanceText = getDistanceTextForLocation(location);
     const savedMeta = "Saved nearby - Accuracy " + Math.round(location.accuracy || 0) + "m";
     const createdAt = location.createdAt ? new Date(location.createdAt).toLocaleString() : "Unknown";
+    const nextLocation = loadLocations().find(function(savedLocation) {
+        return savedLocation.id === location.chainNextLocationId;
+    });
+    const visitorText = location.visitedBy.length === 0 ?
+        "No captures yet" :
+        location.visitedBy.map(function(visit) {
+            return escapeHTML(visit.username) + " at " + escapeHTML(new Date(visit.visitedAt).toLocaleString());
+        }).join("<br>");
 
     card.className = "locationCard libraryDetail";
     card.innerHTML =
         "<div class='locationDetailHeader'>" +
-        "<div><div class='sectionLabel'>SELECTED PLACE</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
+        "<div><div class='sectionLabel'>" + escapeHTML(location.questName) + "</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
         "</div>" +
         "<p class='locationHint'>" + escapeHTML(location.hint || "No clue saved yet.") + "</p>" +
+        "<div class='clueBlock'>" +
+        "<strong>Clue</strong>" +
+        "<p>" + escapeHTML(location.clue || "No clue text yet.") + "</p>" +
+        "<small>Answer: " + escapeHTML(location.clueAnswer || "Scanner capture") + "</small>" +
+        "</div>" +
         "<div class='libraryMetaGrid'>" +
         "<div><small>Status</small><strong>" + escapeHTML(distanceText) + "</strong></div>" +
         "<div><small>Saved</small><strong>" + escapeHTML(createdAt) + "</strong></div>" +
         "<div><small>Accuracy</small><strong>" + Math.round(location.accuracy || 0) + " m</strong></div>" +
         "<div><small>Facing</small><strong>" + escapeHTML(formatFacing(location.facingDegrees)) + "</strong></div>" +
+        "<div><small>Next</small><strong>" + escapeHTML(nextLocation ? nextLocation.name : "Reward screen") + "</strong></div>" +
+        "<div><small>Captures</small><strong>" + location.capturedCount + "</strong></div>" +
         "</div>" +
+        "<p class='rewardText'>" + escapeHTML(location.rewardText || "Reward: +1 point") + "</p>" +
+        "<details class='technicalDetails'" + (currentSettings.showTechnicalDetails ? " open" : "") + ">" +
+        "<summary>Visit history</summary>" +
+        "<p>" + visitorText + "</p>" +
+        "</details>" +
         "<p class='savedMeta'>" + escapeHTML(savedMeta) + "</p>" +
-        "<details class='technicalDetails'>" +
+        "<details class='technicalDetails'" + (currentSettings.showTechnicalDetails ? " open" : "") + ">" +
         "<summary>Show technical details</summary>" +
         "<p>Lat: " + escapeHTML(location.latitude) +
         "<br>Lng: " + escapeHTML(location.longitude) +
@@ -604,6 +947,11 @@ function renderLocationDetail(container, location) {
 function setActiveTarget(location) {
     activeTarget = location;
     appState.target.savedPlaceId = location ? location.id : null;
+
+    if (location) {
+        recordLocationVisit(location, "target-selected");
+    }
+
     renderAppState();
 }
 
@@ -760,5 +1108,7 @@ function escapeHTML(text) {
         .replaceAll("'", "&#039;");
 }
 
+loadAccounts();
+landingGate.hidden = currentSettings.showLandingOnOpen === false;
 renderAppState();
 renderLocations();

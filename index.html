@@ -17,6 +17,36 @@
 
 <body>
 
+    <section id="landingGate" class="landingGate">
+        <div class="landingPanel">
+            <div class="landingMark">△</div>
+            <h1>Have you found a symbol?</h1>
+            <p>Open the scanner when you are standing in front of a quest marker.</p>
+
+            <button id="foundSymbolButton" class="primaryButton" type="button">
+                Yes
+            </button>
+
+            <button id="enterSiteButton" class="secondaryButton" type="button">
+                Enter Full Site
+            </button>
+
+            <form id="authForm" class="authForm" hidden>
+                <label for="usernameInput">Username</label>
+                <input id="usernameInput" maxlength="13" autocomplete="username" placeholder="1 to 13 characters">
+
+                <label for="passwordInput">Password</label>
+                <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Blank is allowed">
+
+                <button class="primaryButton" type="submit">
+                    Enter
+                </button>
+
+                <p id="authMessage" class="authMessage"></p>
+            </form>
+        </div>
+    </section>
+
     <div class="appShell">
 
         <header class="appHeader">
@@ -27,9 +57,6 @@
                 <div class="titleText">
                     <h1>Quest Compass</h1>
                     <p id="modeSubtitle" class="modeSubtitle">Trail Idle</p>
-                    <select id="headerLocationSelect" class="headerLocationSelect" aria-label="Saved location" hidden>
-                        <option value="">No saved places</option>
-                    </select>
                 </div>
 
                 <button id="settingsButton" class="iconButton" type="button">
@@ -71,6 +98,65 @@
                     </span>
                 </button>
 
+            </div>
+
+            <select id="headerLocationSelect" class="headerLocationSelect" aria-label="Saved location" hidden>
+                <option value="">No saved places</option>
+            </select>
+
+            <div id="accountBar" class="accountBar">
+                <span id="accountName">Guest</span>
+                <span id="accountResources">R1 0 · R2 0 · R3 0 · R4 0</span>
+            </div>
+
+            <div id="settingsPanel" class="settingsPanel" hidden>
+                <div class="settingsHeader">
+                    <div>
+                        <div class="sectionLabel">SETTINGS</div>
+                        <h2>Field Controls</h2>
+                    </div>
+                    <button id="closeSettingsButton" class="miniButton" type="button">Close</button>
+                </div>
+
+                <div class="settingsGrid">
+                    <label><input id="settingHighAccuracyGps" type="checkbox"> High accuracy GPS</label>
+                    <label><input id="settingAutoStartScanner" type="checkbox"> Auto-start scanner after symbol prompt</label>
+                    <label><input id="settingSoundCues" type="checkbox"> Sound cues</label>
+                    <label><input id="settingHapticCues" type="checkbox"> Haptic cues</label>
+                    <label><input id="settingShowTechnicalDetails" type="checkbox"> Show technical location details</label>
+                    <label><input id="settingHideExactCoordinates" type="checkbox"> Hide exact coordinates by default</label>
+                </div>
+
+                <div class="settingsInputs">
+                    <label for="settingScannerSensitivity">Scanner sensitivity</label>
+                    <select id="settingScannerSensitivity">
+                        <option value="strict">Strict</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="generous">Generous</option>
+                    </select>
+
+                    <label for="settingAttuneThreshold">Attune threshold</label>
+                    <input id="settingAttuneThreshold" type="number" min="50" max="100">
+
+                    <label for="settingRewardResource1">Reward resource 1</label>
+                    <input id="settingRewardResource1" type="number" min="0">
+
+                    <label for="settingRewardResource2">Reward resource 2</label>
+                    <input id="settingRewardResource2" type="number" min="0">
+                </div>
+
+                <div class="settingsActions">
+                    <button id="saveSettingsButton" class="primaryButton" type="button">Save Settings</button>
+                    <button id="resetLandingButton" class="secondaryButton" type="button">Show Landing Again</button>
+                </div>
+
+                <div class="statsPanel">
+                    <div class="sectionLabel">ACCOUNT</div>
+                    <div id="settingsAccountStats" class="statsText"></div>
+
+                    <div class="sectionLabel">POPULAR QUESTS</div>
+                    <div id="popularQuestStats" class="statsText"></div>
+                </div>
             </div>
 
         </header>
@@ -175,6 +261,17 @@
                         <video id="cameraVideo" autoplay playsinline muted></video>
 
                         <canvas id="cameraCanvas"></canvas>
+
+                        <div id="attunePrompt" class="attunePrompt" hidden>
+                            <button id="attuneButton" class="attuneButton" type="button">
+                                <span>Attune</span>
+                                <small>Hold for 3 seconds</small>
+                            </button>
+
+                            <div class="attuneMeter">
+                                <div id="attuneMeterFill" class="attuneMeterFill"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="markerBanner" class="markerBanner">
@@ -264,6 +361,23 @@
 
                     <label for="hintInput">Hint optional</label>
                     <textarea id="hintInput" placeholder="Example: Look beneath the old oak."></textarea>
+
+                    <label for="questNameInput">Quest / Trail Name</label>
+                    <input id="questNameInput" type="text" placeholder="Example: Old Town Rune Trail">
+
+                    <label for="clueInput">Clue Text</label>
+                    <textarea id="clueInput" placeholder="What should the player learn, read, or solve here?"></textarea>
+
+                    <label for="clueAnswerInput">Optional Answer / Passphrase</label>
+                    <input id="clueAnswerInput" type="text" placeholder="Blank means scanner capture is enough">
+
+                    <label for="rewardTextInput">Reward Text</label>
+                    <textarea id="rewardTextInput" placeholder="Example: The mark warms. You gain one trail point."></textarea>
+
+                    <label for="chainNextLocationSelect">Next Location In Chain</label>
+                    <select id="chainNextLocationSelect">
+                        <option value="">No next location yet</option>
+                    </select>
 
                     <div id="createGpsReadout" class="fieldReadout">
                         Enable GPS to capture this place.
