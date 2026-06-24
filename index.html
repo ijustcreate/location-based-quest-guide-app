@@ -262,6 +262,10 @@
 
                         <canvas id="cameraCanvas"></canvas>
 
+                        <button id="confirmFoundButton" class="confirmFoundButton" type="button" hidden>
+                            Confirm Found
+                        </button>
+
                         <div id="attunePrompt" class="attunePrompt" hidden>
                             <button id="attuneButton" class="attuneButton" type="button">
                                 <span>Attune</span>
@@ -356,6 +360,9 @@
                         <div class="mapPin">📍</div>
                     </div>
 
+                    <label for="locationImageInput">Location / Symbol Photo</label>
+                    <input id="locationImageInput" type="file" accept="image/*" capture="environment">
+
                     <label for="placeNameInput">Place Name</label>
                     <input id="placeNameInput" type="text" placeholder="Example: Old Oak, Front Door, Hidden Gate">
 
@@ -373,6 +380,25 @@
 
                     <label for="rewardTextInput">Reward Text</label>
                     <textarea id="rewardTextInput" placeholder="Example: The mark warms. You gain one trail point."></textarea>
+
+                    <label for="rewardTypeSelect">Reward Type</label>
+                    <select id="rewardTypeSelect">
+                        <option value="lore-page">Lore Page</option>
+                        <option value="creature-card">Creature Card</option>
+                        <option value="treasure">Treasure</option>
+                        <option value="badge">Badge</option>
+                        <option value="artifact">Artifact</option>
+                        <option value="puzzle-piece">Puzzle Piece</option>
+                        <option value="story-fragment">Story Fragment</option>
+                    </select>
+
+                    <label for="rewardRaritySelect">Reward Rarity</label>
+                    <select id="rewardRaritySelect">
+                        <option value="Common">Common</option>
+                        <option value="Rare">Rare</option>
+                        <option value="Epic">Epic</option>
+                        <option value="Legendary">Legendary</option>
+                    </select>
 
                     <label for="chainNextLocationSelect">Next Location In Chain</label>
                     <select id="chainNextLocationSelect">

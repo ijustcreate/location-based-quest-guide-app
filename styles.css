@@ -68,7 +68,7 @@ main {
 .appHeader {
     position: relative;
     top: auto;
-    z-index: 1;
+    z-index: 170;
     padding-top: 4px;
     padding-bottom: 6px;
     background: transparent;
@@ -355,6 +355,23 @@ h1 {
     border: 1px solid rgba(117, 255, 165, 0.45);
     font-size: 36px;
     box-shadow: 0 0 26px rgba(94, 255, 143, 0.22);
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.locationImageThumb {
+    width: 72px;
+    height: 72px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(119, 173, 255, 0.24), rgba(119, 173, 255, 0.05));
+    border: 1px solid rgba(119, 173, 255, 0.5);
+    color: #bcd4ff;
+    font-size: 30px;
+    overflow: hidden;
+    cursor: pointer;
 }
 
 /* Small section label */
@@ -496,6 +513,27 @@ h1 {
     min-height: 280px;
     display: grid;
     place-items: center;
+}
+
+.confirmFoundButton {
+    position: absolute;
+    left: 50%;
+    bottom: 86px;
+    transform: translateX(-50%);
+    z-index: 8;
+    width: auto;
+    min-width: 170px;
+    border-radius: 999px;
+    padding: 13px 20px;
+    background: rgba(91, 141, 255, 0.92);
+    border: 1px solid rgba(194, 221, 255, 0.9);
+    color: white;
+    font-weight: 900;
+    box-shadow: 0 0 24px rgba(91, 141, 255, 0.65);
+}
+
+.confirmFoundButton[hidden] {
+    display: none;
 }
 
 .liveBadge {
@@ -666,6 +704,21 @@ h1 {
     background: rgba(94, 255, 143, 0.12);
     border: 1px solid rgba(94, 255, 143, 0.45);
     font-size: 44px;
+    overflow: hidden;
+    background-position: center;
+    background-size: cover;
+    cursor: pointer;
+}
+
+.mapPin.hasImage {
+    border-color: rgba(119, 173, 255, 0.85);
+    box-shadow: 0 0 24px rgba(119, 173, 255, 0.35);
+}
+
+.targetIcon.hasImage,
+.locationImageThumb.hasImage {
+    background-position: center;
+    background-size: cover;
 }
 
 label {
@@ -677,7 +730,8 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
     width: 100%;
     box-sizing: border-box;
     padding: 14px;
@@ -852,7 +906,7 @@ textarea {
 .modalOverlay {
     position: fixed;
     inset: 0;
-    z-index: 100;
+    z-index: 260;
     display: grid;
     place-items: center;
     padding: 18px;
@@ -882,6 +936,15 @@ textarea {
     margin: 10px 0 0;
     color: #cbd5e1;
     line-height: 1.5;
+}
+
+.imagePreviewFull {
+    width: 100%;
+    max-height: 60vh;
+    object-fit: contain;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.35);
 }
 
 .modalActions {
@@ -1314,11 +1377,13 @@ h1 {
 }
 
 .settingsPanel {
-    position: absolute;
-    left: 14px;
-    right: 14px;
-    top: calc(100% + 8px);
-    z-index: 40;
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: calc(154px + env(safe-area-inset-top));
+    z-index: 220;
+    max-height: calc(100vh - 220px);
+    overflow: auto;
     padding: 16px;
     border-radius: 18px;
     background: rgba(9, 14, 26, 0.97);

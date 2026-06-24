@@ -40,6 +40,8 @@ let attuneSignalStartedAt = null;
 let attuneHoldStartedAt = null;
 let attuneHoldTimer = null;
 let attuneCompleted = false;
+let pendingLocationImageDataUrl = "";
+let lastScannerCueStatus = "";
 
 const modeSubtitle = document.getElementById("modeSubtitle");
 const headerLocationSelect = document.getElementById("headerLocationSelect");
@@ -92,7 +94,11 @@ const questNameInput = document.getElementById("questNameInput");
 const clueInput = document.getElementById("clueInput");
 const clueAnswerInput = document.getElementById("clueAnswerInput");
 const rewardTextInput = document.getElementById("rewardTextInput");
+const rewardTypeSelect = document.getElementById("rewardTypeSelect");
+const rewardRaritySelect = document.getElementById("rewardRaritySelect");
 const chainNextLocationSelect = document.getElementById("chainNextLocationSelect");
+const locationImageInput = document.getElementById("locationImageInput");
+const locationImageButton = document.querySelector(".mapPin");
 
 const cameraVideo = document.getElementById("cameraVideo");
 const cameraCanvas = document.getElementById("cameraCanvas");
@@ -119,6 +125,8 @@ const modalActions = document.getElementById("modalActions");
 const attunePrompt = document.getElementById("attunePrompt");
 const attuneButton = document.getElementById("attuneButton");
 const attuneMeterFill = document.getElementById("attuneMeterFill");
+const confirmFoundButton = document.getElementById("confirmFoundButton");
+const targetIconElement = document.querySelector(".targetIcon");
 
 document.querySelectorAll(".navButton").forEach(function(button) {
     button.addEventListener("click", function() {
@@ -209,6 +217,13 @@ attuneButton.addEventListener("pointerdown", startAttuneHold);
 attuneButton.addEventListener("pointerup", cancelAttuneHold);
 attuneButton.addEventListener("pointerleave", cancelAttuneHold);
 attuneButton.addEventListener("pointercancel", cancelAttuneHold);
+confirmFoundButton.addEventListener("click", confirmFoundLocation);
+locationImageInput.addEventListener("change", handleLocationImageSelected);
+locationImageButton.addEventListener("click", function() {
+    if (pendingLocationImageDataUrl) {
+        showImagePreview(pendingLocationImageDataUrl, "Location Photo");
+    }
+});
 
 modalOverlay.addEventListener("click", function(event) {
     if (event.target === modalOverlay) {
@@ -362,9 +377,18 @@ function updateScannerUI(result) {
     updateBar(lightQualityBar, lightQualityText, appState.scanner.lightQuality);
     updateBar(frameStabilityBar, frameStabilityText, appState.scanner.frameStability);
     updateBar(confidenceBar, confidenceText, appState.scanner.lockConfidence);
+    updateConfirmFoundButton();
+    playScannerCue(appState.scanner.status);
     updateAttuneAvailability();
 
     renderAppState();
+}
+
+function updateConfirmFoundButton() {
+    const canConfirm = activeTarget &&
+        (appState.scanner.status === "sigilLocked" || appState.scanner.lockConfidence >= 70);
+
+    confirmFoundButton.hidden = !canConfirm;
 }
 
 function updateBar(barElement, textElement, value) {
@@ -526,8 +550,11 @@ function savePlace(shouldFollow) {
         clue: clueInput.value.trim() || hintInput.value.trim(),
         clueAnswer: clueAnswerInput.value.trim(),
         rewardText: rewardTextInput.value.trim(),
+        rewardType: rewardTypeSelect.value,
+        rewardRarity: rewardRaritySelect.value,
         questName: questNameInput.value.trim() || "Field Quest",
         chainNextLocationId: chainNextLocationSelect.value || "",
+        imageDataUrl: pendingLocationImageDataUrl,
         latitude: appState.gps.latitude,
         longitude: appState.gps.longitude,
         accuracy: appState.gps.accuracyMeters,
@@ -543,8 +570,15 @@ function savePlace(shouldFollow) {
     clueInput.value = "";
     clueAnswerInput.value = "";
     rewardTextInput.value = "";
+    rewardTypeSelect.value = "lore-page";
+    rewardRaritySelect.value = "Common";
     questNameInput.value = "";
     chainNextLocationSelect.value = "";
+    pendingLocationImageDataUrl = "";
+    locationImageInput.value = "";
+    locationImageButton.classList.remove("hasImage");
+    locationImageButton.style.backgroundImage = "";
+    locationImageButton.textContent = "📍";
 
     renderLocations();
 
@@ -650,21 +684,53 @@ function handleAuthSubmit() {
     renderAppState();
 }
 
+function handleLocationImageSelected(event) {
+    const file = event.target.files && event.target.files[0];
+
+    if (!file) {
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(loadEvent) {
+        pendingLocationImageDataUrl = loadEvent.target.result;
+        locationImageButton.classList.add("hasImage");
+        locationImageButton.style.backgroundImage = "url('" + pendingLocationImageDataUrl + "')";
+        locationImageButton.textContent = "";
+    };
+
+    reader.readAsDataURL(file);
+}
+
+function getExplorerRank(user) {
+    if (!user) {
+        return 1;
+    }
+
+    const score = Number(user.points || 0) +
+        (Array.isArray(user.unlockedLocationIds) ? user.unlockedLocationIds.length : 0) +
+        (Array.isArray(user.artifacts) ? user.artifacts.length : 0) +
+        Number(user.secretsSolved || 0);
+
+    return Math.max(1, Math.floor(score / 5) + 1);
+}
+
 function renderAccountBar() {
     currentUser = getCurrentUser();
 
     if (!currentUser) {
         accountName.textContent = "Guest";
-        accountResources.textContent = "R1 0 - R2 0 - R3 0 - R4 0";
+        accountResources.textContent = "Glimmer 0 - Relics 0 - Keys 0 - Crowns 0";
         return;
     }
 
-    accountName.textContent = currentUser.username + " · " + currentUser.points + " pts";
+    accountName.textContent = currentUser.username + " - Explorer Rank " + getExplorerRank(currentUser);
     accountResources.textContent =
-        "R1 " + currentUser.resources.resource1 +
-        " - R2 " + currentUser.resources.resource2 +
-        " - R3 " + currentUser.resources.resource3 +
-        " - R4 " + currentUser.resources.resource4;
+        "Glimmer " + currentUser.resources.resource1 +
+        " - Relics " + currentUser.resources.resource2 +
+        " - Keys " + currentUser.resources.resource3 +
+        " - Crowns " + currentUser.resources.resource4;
 }
 
 function renderSettingsPanel() {
@@ -684,9 +750,11 @@ function renderSettingsPanel() {
     if (currentUser) {
         settingsAccountStats.innerHTML =
             "<p><strong>" + escapeHTML(currentUser.username) + "</strong></p>" +
-            "<p>Points: " + currentUser.points + "</p>" +
-            "<p>Created: " + currentUser.createdLocationIds.length + " · Unlocked: " + currentUser.unlockedLocationIds.length + "</p>" +
-            "<p>Captures: " + currentUser.captureHistory.length + " · Visits: " + currentUser.visitHistory.length + "</p>";
+            "<p>Explorer Rank: " + getExplorerRank(currentUser) + "</p>" +
+            "<p>Locations Found: " + currentUser.unlockedLocationIds.length + "</p>" +
+            "<p>Artifacts Collected: " + currentUser.artifacts.length + "</p>" +
+            "<p>Secrets Solved: " + currentUser.secretsSolved + "</p>" +
+            "<p>Captures: " + currentUser.captureHistory.length + " - Visits: " + currentUser.visitHistory.length + "</p>";
     } else {
         settingsAccountStats.textContent = "No account signed in.";
     }
@@ -808,6 +876,7 @@ function completeAttuneCapture() {
     };
 
     const result = recordLocationCapture(captureLocation);
+    playSoundCue("questComplete");
     currentUser = getCurrentUser();
     renderAccountBar();
     renderLocations();
@@ -821,8 +890,8 @@ function completeAttuneCapture() {
 
     if (nextLocation) {
         showModal({
-            title: "Captured",
-            message: (captureLocation.rewardText || "You gained one point.") + " Next location: " + nextLocation.name,
+            title: "Reward Revealed",
+            message: getRewardRevealText(captureLocation) + " Next location: " + nextLocation.name,
             actions: [
                 {
                     label: "Follow Next",
@@ -840,11 +909,67 @@ function completeAttuneCapture() {
     }
 
     showModal({
-        title: "Captured",
-        message: (captureLocation.rewardText || "You gained one point.") +
+        title: "Reward Revealed",
+        message: getRewardRevealText(captureLocation) +
             " Account points: " + (result && result.user ? result.user.points : 0),
         actions: [
             { label: "Nice", className: "primaryButton", onClick: hideModal }
+        ]
+    });
+}
+
+function getRewardRevealText(location) {
+    return (location.rewardRarity || "Common") + " " +
+        String(location.rewardType || "story-fragment").replaceAll("-", " ") +
+        ": " + (location.rewardText || "You gained one point.") + " ";
+}
+
+function confirmFoundLocation() {
+    if (!activeTarget) {
+        showModal({
+            title: "Choose A Target",
+            message: "Select a location from Field Notes before confirming a scanner lock.",
+            actions: [
+                { label: "Open Field Notes", className: "primaryButton", onClick: function() { hideModal(); setMode("library"); } },
+                { label: "Close", className: "secondaryButton", onClick: hideModal }
+            ]
+        });
+        return;
+    }
+
+    let refinedTarget = activeTarget;
+
+    if (appState.gps.status === "active") {
+        refinedTarget = refineLocationPosition(
+            activeTarget.id,
+            appState.gps.latitude,
+            appState.gps.longitude,
+            appState.gps.accuracyMeters
+        ) || activeTarget;
+    }
+
+    const alreadyCaptured = currentUser && currentUser.captureHistory.some(function(capture) {
+        return capture.locationId === activeTarget.id;
+    });
+
+    if (!alreadyCaptured) {
+        recordLocationCapture(refinedTarget);
+    } else {
+        recordLocationVisit(refinedTarget, "confirmed-found");
+    }
+
+    activeTarget = refinedTarget;
+    currentUser = getCurrentUser();
+    renderLocations();
+    renderSettingsPanel();
+    renderAppState();
+    playSoundCue("questComplete");
+
+    showModal({
+        title: "Location Confirmed",
+        message: "The marker is locked. This location now has a fresher GPS sample, and your discovery has been saved.",
+        actions: [
+            { label: "Continue", className: "primaryButton", onClick: hideModal }
         ]
     });
 }
@@ -866,6 +991,7 @@ function renderLocationDetail(container, location) {
     card.className = "locationCard libraryDetail";
     card.innerHTML =
         "<div class='locationDetailHeader'>" +
+        "<button class='locationImageThumb' type='button' aria-label='Open location photo'>" + (location.imageDataUrl ? "" : "✦") + "</button>" +
         "<div><div class='sectionLabel'>" + escapeHTML(location.questName) + "</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
         "</div>" +
         "<p class='locationHint'>" + escapeHTML(location.hint || "No clue saved yet.") + "</p>" +
@@ -882,7 +1008,7 @@ function renderLocationDetail(container, location) {
         "<div><small>Next</small><strong>" + escapeHTML(nextLocation ? nextLocation.name : "Reward screen") + "</strong></div>" +
         "<div><small>Captures</small><strong>" + location.capturedCount + "</strong></div>" +
         "</div>" +
-        "<p class='rewardText'>" + escapeHTML(location.rewardText || "Reward: +1 point") + "</p>" +
+        "<p class='rewardText'><strong>" + escapeHTML(location.rewardRarity) + " " + escapeHTML(location.rewardType.replaceAll("-", " ")) + "</strong><br>" + escapeHTML(location.rewardText || "Reward: +1 point") + "</p>" +
         "<details class='technicalDetails'" + (currentSettings.showTechnicalDetails ? " open" : "") + ">" +
         "<summary>Visit history</summary>" +
         "<p>" + visitorText + "</p>" +
@@ -900,6 +1026,16 @@ function renderLocationDetail(container, location) {
         "<button class='editButton'>Edit</button>" +
         "<button class='deleteButton'>Delete</button>" +
         "</div>";
+
+    const imageThumb = card.querySelector(".locationImageThumb");
+
+    if (location.imageDataUrl) {
+        imageThumb.classList.add("hasImage");
+        imageThumb.style.backgroundImage = "url('" + location.imageDataUrl + "')";
+        imageThumb.addEventListener("click", function() {
+            showImagePreview(location.imageDataUrl, location.name);
+        });
+    }
 
     card.querySelector(".followButton").addEventListener("click", function() {
         setActiveTarget(location);
@@ -990,6 +1126,7 @@ function updateNavigationDisplay() {
     if (!activeTarget) {
         directionArrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
         bearingReadout.textContent = "No target";
+        updateTargetIcon(null);
 
         trailTargetName.textContent = "No Active Trail";
         trailTargetHint.textContent = "Choose a saved place from Field Notes.";
@@ -1003,6 +1140,7 @@ function updateNavigationDisplay() {
         return;
     }
 
+    updateTargetIcon(activeTarget);
     trailTargetName.textContent = activeTarget.name;
     trailTargetHint.textContent = activeTarget.hint || "Follow the signal.";
 
@@ -1056,6 +1194,19 @@ function updateNavigationDisplay() {
         "<br>Status: " + (arrived ? "Discovery reached" : "Move toward target");
 }
 
+function updateTargetIcon(location) {
+    if (!targetIconElement) {
+        return;
+    }
+
+    targetIconElement.classList.toggle("hasImage", !!(location && location.imageDataUrl));
+    targetIconElement.style.backgroundImage = location && location.imageDataUrl ? "url('" + location.imageDataUrl + "')" : "";
+    targetIconElement.textContent = location && location.imageDataUrl ? "" : "🌳";
+    targetIconElement.onclick = location && location.imageDataUrl ? function() {
+        showImagePreview(location.imageDataUrl, location.name);
+    } : null;
+}
+
 function clearAllSavedLocations() {
     showModal({
         title: "Clear Field Notes",
@@ -1093,6 +1244,68 @@ function showModal(config) {
     });
 
     modalOverlay.hidden = false;
+}
+
+function showImagePreview(imageDataUrl, title) {
+    modalTitle.textContent = title || "Location Photo";
+    modalMessage.innerHTML = "<img class='imagePreviewFull' alt='Saved location photo' src='" + imageDataUrl + "'>";
+    modalActions.innerHTML = "";
+
+    const closeButton = document.createElement("button");
+
+    closeButton.type = "button";
+    closeButton.className = "primaryButton";
+    closeButton.textContent = "Close";
+    closeButton.addEventListener("click", hideModal);
+    modalActions.appendChild(closeButton);
+    modalOverlay.hidden = false;
+}
+
+function playScannerCue(status) {
+    if (status === lastScannerCueStatus) {
+        return;
+    }
+
+    lastScannerCueStatus = status;
+
+    if (status === "sigilLocked") {
+        playSoundCue("gpsLock");
+    } else if (status === "signalFound") {
+        playSoundCue("markerFound");
+    } else if (status === "error") {
+        playSoundCue("wrongSymbol");
+    }
+}
+
+function playSoundCue(type) {
+    if (!currentSettings.soundCues || (typeof window.AudioContext === "undefined" && typeof window.webkitAudioContext === "undefined")) {
+        return;
+    }
+
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    const audio = new AudioCtor();
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    const frequencies = {
+        gpsLock: [620, 880],
+        markerFound: [440, 660, 880],
+        questComplete: [523, 659, 784, 1046],
+        wrongSymbol: [180, 120]
+    }[type] || [440];
+
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.type = type === "wrongSymbol" ? "sawtooth" : "sine";
+    gain.gain.setValueAtTime(0.001, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, audio.currentTime + 0.03);
+
+    frequencies.forEach(function(frequency, index) {
+        oscillator.frequency.setValueAtTime(frequency, audio.currentTime + index * 0.12);
+    });
+
+    gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + frequencies.length * 0.14 + 0.05);
+    oscillator.start();
+    oscillator.stop(audio.currentTime + frequencies.length * 0.14 + 0.08);
 }
 
 function hideModal() {

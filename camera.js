@@ -193,20 +193,24 @@ function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
         stableMarkerFrames * 25
     );
 
-    const lockConfidence = Math.round(
-        best.redSignal * 0.25 +
-        best.shapeMatch * 0.35 +
-        best.hollowScore * 0.15 +
-        lighting.quality * 0.1 +
-        frameStability * 0.15
+    let lockConfidence = Math.round(
+        best.redSignal * 0.35 +
+        best.shapeMatch * 0.24 +
+        lighting.quality * 0.16 +
+        frameStability * 0.18 +
+        best.hollowScore * 0.07
     );
 
+    if (best.redSignal >= 90 && best.shapeMatch >= 50 && lighting.quality >= 40) {
+        lockConfidence = Math.min(100, lockConfidence + 12);
+    }
+
     const lockReady =
-        best.redSignal >= 70 &&
-        best.shapeMatch >= 55 &&
-        frameStability >= 80 &&
+        best.redSignal >= 75 &&
+        best.shapeMatch >= 50 &&
+        frameStability >= 50 &&
         lighting.quality >= 25 &&
-        lockConfidence >= 76;
+        lockConfidence >= 72;
 
     if (lockReady && stableHoldStartedAt === null) {
         stableHoldStartedAt = Date.now();

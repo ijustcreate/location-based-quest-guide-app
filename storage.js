@@ -44,6 +44,9 @@ function createAccount(username, password, resources) {
             resources || {}
         ),
         points: 0,
+        secretsSolved: 0,
+        artifacts: [],
+        collection: [],
         createdLocationIds: [],
         unlockedLocationIds: [],
         visitHistory: [],
@@ -66,6 +69,9 @@ function normalizeAccount(account) {
         {
             resources: Object.assign(normalized.resources, account.resources || {}),
             points: Number(account.points || 0),
+            secretsSolved: Number(account.secretsSolved || 0),
+            artifacts: Array.isArray(account.artifacts) ? account.artifacts : [],
+            collection: Array.isArray(account.collection) ? account.collection : [],
             createdLocationIds: Array.isArray(account.createdLocationIds) ? account.createdLocationIds : [],
             unlockedLocationIds: Array.isArray(account.unlockedLocationIds) ? account.unlockedLocationIds : [],
             visitHistory: Array.isArray(account.visitHistory) ? account.visitHistory : [],
@@ -265,8 +271,12 @@ function normalizeLocation(location) {
         clueType: location.clueType || "text",
         clueAnswer: location.clueAnswer || "",
         rewardText: location.rewardText || "",
+        rewardType: location.rewardType || "story-fragment",
+        rewardRarity: location.rewardRarity || "Common",
         questName: location.questName || "Field Quest",
         chainNextLocationId: location.chainNextLocationId || "",
+        imageDataUrl: location.imageDataUrl || "",
+        gpsSamples: Array.isArray(location.gpsSamples) ? location.gpsSamples : [],
         latitude: Number(location.latitude ?? location.lat),
         longitude: Number(location.longitude ?? location.lng),
         accuracy: Number(location.accuracy ?? location.accuracyMeters ?? 0),
@@ -330,6 +340,51 @@ function addLocation(location) {
         currentUser.updatedAt = new Date().toISOString();
         saveCurrentUser(currentUser);
     }
+}
+
+function updateLocationById(locationId, updater) {
+    let updatedLocation = null;
+    const locations = loadLocations().map(function(location) {
+        if (location.id !== locationId) {
+            return location;
+        }
+
+        const nextLocation = normalizeLocation(
+            typeof updater === "function" ? updater(location) : Object.assign({}, location, updater || {})
+        );
+
+        nextLocation.updatedAt = new Date().toISOString();
+        updatedLocation = nextLocation;
+        return nextLocation;
+    });
+
+    saveLocations(locations);
+    return updatedLocation;
+}
+
+function refineLocationPosition(locationId, latitude, longitude, accuracy) {
+    if (!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
+        return null;
+    }
+
+    return updateLocationById(locationId, function(location) {
+        const refined = normalizeLocation(location);
+        const sample = {
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            accuracy: Number(accuracy || 0),
+            username: getCurrentUsername() || "guest",
+            capturedAt: new Date().toISOString()
+        };
+        const previousSamples = refined.gpsSamples.length || 1;
+
+        refined.latitude = ((Number(refined.latitude) * previousSamples) + sample.latitude) / (previousSamples + 1);
+        refined.longitude = ((Number(refined.longitude) * previousSamples) + sample.longitude) / (previousSamples + 1);
+        refined.accuracy = Math.min(Number(refined.accuracy || sample.accuracy || 0), Number(sample.accuracy || refined.accuracy || 0));
+        refined.gpsSamples.push(sample);
+
+        return refined;
+    });
 }
 
 function deleteLocationById(locationId) {
@@ -411,9 +466,24 @@ function recordLocationCapture(location) {
     currentUser.points += 1;
     currentUser.resources.resource1 += Number(settings.rewardResource1 || 0);
     currentUser.resources.resource2 += Number(settings.rewardResource2 || 0);
+    currentUser.artifacts.push({
+        id: "artifact-" + Date.now() + "-" + Math.floor(Math.random() * 10000),
+        locationId: location.id,
+        locationName: location.name,
+        name: location.rewardText || location.name,
+        type: location.rewardType || "story-fragment",
+        rarity: location.rewardRarity || "Common",
+        discoveredAt: capturedAt
+    });
+    currentUser.collection = currentUser.artifacts;
+    if (location.clue || location.clueAnswer) {
+        currentUser.secretsSolved += 1;
+    }
     currentUser.captureHistory.push({
         locationId: location.id,
         locationName: location.name,
+        rewardType: location.rewardType || "story-fragment",
+        rewardRarity: location.rewardRarity || "Common",
         capturedAt: capturedAt
     });
 
