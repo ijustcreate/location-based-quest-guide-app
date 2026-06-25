@@ -471,6 +471,10 @@ function loadPublicLocations() {
     }
 }
 
+function loadKnownLocations() {
+    return loadAllLocations();
+}
+
 function updateLocationById(locationId, updater) {
     let updatedLocation = null;
     const locations = loadLocations().map(function(location) {
@@ -603,6 +607,17 @@ function completeGlyphObjective(locationId, objectiveId, sighting) {
             return matchedObjective;
         });
 
+        if (Number.isFinite(Number(sighting.latitude)) && Number.isFinite(Number(sighting.longitude))) {
+            updated.gpsSamples.push({
+                latitude: Number(sighting.latitude),
+                longitude: Number(sighting.longitude),
+                accuracy: Number(sighting.accuracy || 0),
+                username: sighting.username,
+                capturedAt: sighting.capturedAt,
+                source: "glyph"
+            });
+        }
+
         const requiredObjectives = updated.glyphObjectives.filter(function(objective) {
             return objective.required;
         });
@@ -622,7 +637,7 @@ function completeGlyphObjective(locationId, objectiveId, sighting) {
         return updated;
     };
 
-    const updatedLocation = isAdminUser() ? updateLocationEverywhere(locationId, updater) : updateLocationById(locationId, updater);
+    const updatedLocation = updateLocationEverywhere(locationId, updater) || updateLocationById(locationId, updater);
 
     if (!updatedLocation) {
         return null;
@@ -655,6 +670,33 @@ function completeGlyphObjective(locationId, objectiveId, sighting) {
         objective: matchedObjective,
         awardedPoints: awardedPoints
     };
+}
+
+function getLocationGpsAnchors(location) {
+    const anchors = [];
+    const normalized = normalizeLocation(location);
+
+    if (Number.isFinite(normalized.latitude) && Number.isFinite(normalized.longitude)) {
+        anchors.push({
+            latitude: normalized.latitude,
+            longitude: normalized.longitude,
+            accuracy: normalized.accuracy || 0,
+            source: "saved"
+        });
+    }
+
+    normalized.gpsSamples.forEach(function(sample) {
+        if (Number.isFinite(Number(sample.latitude)) && Number.isFinite(Number(sample.longitude))) {
+            anchors.push({
+                latitude: Number(sample.latitude),
+                longitude: Number(sample.longitude),
+                accuracy: Number(sample.accuracy || 0),
+                source: "capture"
+            });
+        }
+    });
+
+    return anchors;
 }
 
 function refineLocationPosition(locationId, latitude, longitude, accuracy) {

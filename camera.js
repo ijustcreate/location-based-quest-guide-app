@@ -103,6 +103,34 @@ function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
     });
 }
 
+function stopCameraMarkerDetection(videoElement, canvasElement) {
+    if (cameraDetectionTimer) {
+        clearInterval(cameraDetectionTimer);
+        cameraDetectionTimer = null;
+    }
+
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(function(track) {
+            track.stop();
+        });
+        cameraStream = null;
+    }
+
+    if (videoElement) {
+        videoElement.pause();
+        videoElement.srcObject = null;
+        videoElement.style.display = "none";
+    }
+
+    if (canvasElement) {
+        canvasElement.style.display = "none";
+    }
+
+    stableMarkerFrames = 0;
+    lastBestBox = null;
+    stableHoldStartedAt = null;
+}
+
 function scanFrameForGlyphTriangle(videoElement, canvasElement, onResult) {
     // Do not scan until video is ready.
 
@@ -418,7 +446,7 @@ function rgbToHsv(r, g, b) {
 function getGlyphColorCode(r, g, b) {
     const hsv = rgbToHsv(r, g, b);
 
-    if (hsv.saturation <= 0.32 || hsv.value <= 0.16) {
+    if (hsv.saturation <= 0.24 || hsv.value <= 0.12) {
         return 0;
     }
 
@@ -430,7 +458,10 @@ function getGlyphColorCode(r, g, b) {
         return 2;
     }
 
-    if (hsv.hue >= 285 && hsv.hue <= 337) {
+    if (
+        (hsv.hue >= 270 && hsv.hue <= 337) ||
+        (r > 135 && b > 105 && r > g * 1.18 && b > g * 1.08)
+    ) {
         return 3;
     }
 

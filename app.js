@@ -44,6 +44,8 @@ let attuneCompleted = false;
 let pendingLocationImageDataUrl = "";
 let lastScannerCueStatus = "";
 let libraryView = "mine";
+let pendingGpsCallbacks = [];
+let lastGlyphCompletionKey = "";
 
 const modeSubtitle = document.getElementById("modeSubtitle");
 const headerLocationSelect = document.getElementById("headerLocationSelect");
@@ -61,6 +63,7 @@ const settingsPanel = document.getElementById("settingsPanel");
 const closeSettingsButton = document.getElementById("closeSettingsButton");
 const saveSettingsButton = document.getElementById("saveSettingsButton");
 const resetLandingButton = document.getElementById("resetLandingButton");
+const settingsClearButton = document.getElementById("settingsClearButton");
 const settingsAccountStats = document.getElementById("settingsAccountStats");
 const popularQuestStats = document.getElementById("popularQuestStats");
 const adminTools = document.getElementById("adminTools");
@@ -175,11 +178,13 @@ document.getElementById("trailSaveButton").addEventListener("click", function() 
 });
 
 foundGlyphButton.addEventListener("click", function() {
-    appState.scannerOverlay = true;
-    setMode("scan");
-    if (appState.scanner.status === "off" || appState.scanner.status === "error") {
-        enableScanner();
-    }
+    requestGpsThen(function() {
+        appState.scannerOverlay = true;
+        setMode("scan");
+        if (appState.scanner.status === "off" || appState.scanner.status === "error") {
+            enableScanner();
+        }
+    });
 });
 
 document.getElementById("scanCameraButton").addEventListener("click", enableScanner);
@@ -193,6 +198,7 @@ document.getElementById("createSaveFollowButton").addEventListener("click", func
 });
 
 document.getElementById("clearButton").addEventListener("click", clearAllSavedLocations);
+settingsClearButton.addEventListener("click", clearAllSavedLocations);
 
 headerLocationSelect.addEventListener("change", function() {
     selectedLibraryLocationId = headerLocationSelect.value || null;
@@ -259,12 +265,14 @@ resetDebugButton.addEventListener("click", function() {
 });
 
 foundSymbolButton.addEventListener("click", function() {
-    enterApp();
-    setMode("scan");
+    enterApp(false);
+    requestGpsThen(function() {
+        setMode("scan");
 
-    if (currentSettings.autoStartScanner) {
-        enableScanner();
-    }
+        if (currentSettings.autoStartScanner) {
+            enableScanner();
+        }
+    });
 });
 
 enterSiteButton.addEventListener("click", function() {
@@ -302,8 +310,14 @@ modalOverlay.addEventListener("click", function(event) {
 });
 
 function setMode(mode) {
+    const leavingScan = appState.activeTab === "scan" && mode !== "scan";
+
     if (mode !== "scan") {
         appState.scannerOverlay = false;
+    }
+
+    if (leavingScan) {
+        disableScanner();
     }
 
     appState.activeTab = mode;
@@ -329,6 +343,31 @@ function setMode(mode) {
     renderAppState();
 }
 
+function requestGpsThen(callback) {
+    if (appState.gps.status === "active") {
+        callback();
+        return;
+    }
+
+    pendingGpsCallbacks.push(callback);
+
+    showModal({
+        title: "GPS Needed",
+        message: "Quest Compass needs GPS on so glyph captures can be matched to nearby known locations.",
+        actions: [
+            {
+                label: "Turn On GPS",
+                className: "primaryButton",
+                onClick: function() {
+                    hideModal();
+                    enableGPS();
+                }
+            },
+            { label: "Cancel", className: "secondaryButton", onClick: hideModal }
+        ]
+    });
+}
+
 function enableGPS() {
     if (!navigator.geolocation) {
         appState.gps.status = "error";
@@ -349,12 +388,17 @@ function enableGPS() {
             appState.gps.accuracyMeters = position.coords.accuracy;
             appState.gps.error = null;
 
+            const callbacks = pendingGpsCallbacks.splice(0);
+            callbacks.forEach(function(callback) {
+                callback();
+            });
             renderAppState();
             renderLocations();
         },
         function(error) {
             appState.gps.status = "error";
             appState.gps.error = error.message;
+            pendingGpsCallbacks = [];
             renderAppState();
         },
         {
@@ -418,6 +462,11 @@ function handleDeviceOrientation(event) {
 }
 
 function enableScanner() {
+    if (appState.gps.status !== "active") {
+        requestGpsThen(enableScanner);
+        return;
+    }
+
     appState.scanner.status = "searching";
     attuneCompleted = false;
     attuneSignalStartedAt = null;
@@ -430,6 +479,20 @@ function enableScanner() {
         cameraCanvas,
         updateScannerUI
     );
+}
+
+function disableScanner() {
+    stopCameraMarkerDetection(cameraVideo, cameraCanvas);
+    appState.scanner.status = "off";
+    appState.scanner.colorSignal = 0;
+    appState.scanner.symbolMatch = 0;
+    appState.scanner.lightQuality = 0;
+    appState.scanner.frameStability = 0;
+    appState.scanner.lockConfidence = 0;
+    appState.scanner.lockedAt = null;
+    appState.scanner.error = null;
+    confirmFoundButton.hidden = true;
+    attunePrompt.hidden = true;
 }
 
 function updateScannerUI(result) {
@@ -463,11 +526,28 @@ function updateScannerUI(result) {
 }
 
 function handleGlyphScanResult(result) {
-    if (!result.confirmed || !activeTarget) {
+    if (!result.confirmed) {
         return;
     }
 
-    const pendingObjectives = activeTarget.glyphObjectives.filter(function(objective) {
+    if (appState.gps.status !== "active") {
+        markerTitle.textContent = "GPS needed";
+        markerMessage.textContent = "Turn on GPS so this glyph can be matched to a known location.";
+        requestGpsThen(function() {});
+        return;
+    }
+
+    const match = findNearestGlyphMatch(result);
+
+    if (!match || !match.location) {
+        markerTitle.textContent = "Unknown glyph";
+        markerMessage.textContent = "This " + (result.colorFamily || "unknown") + " glyph is not close to a known unlocked location.";
+        playSoundCue("wrongSymbol");
+        return;
+    }
+
+    const targetLocation = match.location;
+    const pendingObjectives = targetLocation.glyphObjectives.filter(function(objective) {
         return objective.status !== "complete";
     });
     const matchedObjective = pendingObjectives.find(function(objective) {
@@ -478,10 +558,18 @@ function handleGlyphScanResult(result) {
 
     if (!matchedObjective) {
         markerTitle.textContent = "Glyph mismatch";
-        markerMessage.textContent = "This " + (result.colorFamily || "unknown") + " glyph is not assigned to " + activeTarget.name + ".";
+        markerMessage.textContent = "This " + (result.colorFamily || "unknown") + " glyph is not assigned to " + targetLocation.name + ".";
         playSoundCue("wrongSymbol");
         return;
     }
+
+    const completionKey = targetLocation.id + ":" + matchedObjective.id + ":" + result.colorFamily;
+
+    if (completionKey === lastGlyphCompletionKey) {
+        return;
+    }
+
+    lastGlyphCompletionKey = completionKey;
 
     const sighting = {
         username: getCurrentUsername() || "guest",
@@ -490,9 +578,13 @@ function handleGlyphScanResult(result) {
         colorFamily: result.colorFamily,
         shape: result.shape || "hollow-triangle",
         evidenceRequirement: matchedObjective.evidenceRequirement,
-        imageDataUrl: cameraCanvas.toDataURL ? cameraCanvas.toDataURL("image/jpeg", 0.76) : ""
+        imageDataUrl: cameraCanvas.toDataURL ? cameraCanvas.toDataURL("image/jpeg", 0.76) : "",
+        latitude: appState.gps.latitude,
+        longitude: appState.gps.longitude,
+        accuracy: appState.gps.accuracyMeters,
+        distanceMeters: Math.round(match.distanceMeters)
     };
-    const completion = completeGlyphObjective(activeTarget.id, matchedObjective.id, sighting);
+    const completion = completeGlyphObjective(targetLocation.id, matchedObjective.id, sighting);
 
     if (!completion) {
         return;
@@ -504,8 +596,99 @@ function handleGlyphScanResult(result) {
     renderSettingsPanel();
     renderAppState();
     markerTitle.textContent = "Glyph captured";
-    markerMessage.textContent = matchedObjective.label + " completed. +" + completion.awardedPoints + " points.";
+    markerMessage.textContent = "Congrats, you found " + completion.location.name + ". " + matchedObjective.label + " completed. +" + completion.awardedPoints + " points.";
     playSoundCue("questComplete");
+    showGlyphCompletionModal(completion);
+}
+
+function findNearestGlyphMatch(result) {
+    const userLat = appState.gps.latitude;
+    const userLng = appState.gps.longitude;
+    const maxDistance = Math.max(45, Number(appState.gps.accuracyMeters || 0) + 30);
+    let best = null;
+
+    loadKnownLocations().forEach(function(location) {
+        const hasMatchingGlyph = location.glyphObjectives.some(function(objective) {
+            return objective.status !== "complete" &&
+                objective.colorFamily === result.colorFamily &&
+                objective.shape === (result.shape || "hollow-triangle") &&
+                Number(result.lockConfidence || 0) >= Number(objective.minConfidence || 72);
+        });
+
+        if (!hasMatchingGlyph) {
+            return;
+        }
+
+        getLocationGpsAnchors(location).forEach(function(anchor) {
+            const distance = calculateDistanceMeters(userLat, userLng, anchor.latitude, anchor.longitude);
+
+            if (distance <= maxDistance && (!best || distance < best.distanceMeters)) {
+                best = {
+                    location: location,
+                    distanceMeters: distance,
+                    anchor: anchor
+                };
+            }
+        });
+    });
+
+    if (best) {
+        return best;
+    }
+
+    if (activeTarget) {
+        return {
+            location: activeTarget,
+            distanceMeters: Infinity,
+            anchor: null
+        };
+    }
+
+    return null;
+}
+
+function showGlyphCompletionModal(completion) {
+    const location = completion.location;
+    const required = location.glyphObjectives.filter(function(objective) {
+        return objective.required;
+    });
+    const done = required.every(function(objective) {
+        return objective.status === "complete";
+    });
+    const nextLocation = location.chainNextLocationId ?
+        loadKnownLocations().find(function(savedLocation) {
+            return savedLocation.id === location.chainNextLocationId;
+        }) :
+        findSuggestedNextLocation(location);
+
+    showModal({
+        title: done ? "Quest Location Complete" : "Glyph Found",
+        message: done ?
+            "Congrats, you found " + location.name + ". All required glyphs are complete." :
+            "Congrats, you found " + location.name + ". " + getGlyphProgressText(location),
+        actions: nextLocation ? [
+            {
+                label: "Next Location",
+                className: "primaryButton",
+                onClick: function() {
+                    hideModal();
+                    setActiveTarget(nextLocation);
+                    setMode("trail");
+                }
+            },
+            { label: "Stay Here", className: "secondaryButton", onClick: hideModal }
+        ] : [
+            { label: "Continue", className: "primaryButton", onClick: hideModal }
+        ]
+    });
+}
+
+function findSuggestedNextLocation(location) {
+    return loadKnownLocations().find(function(candidate) {
+        return candidate.id !== location.id &&
+            candidate.questName === location.questName &&
+            !candidate.completedAt;
+    }) || null;
 }
 
 function updateConfirmFoundButton() {
@@ -876,11 +1059,17 @@ function renderChainSelect(locations) {
     });
 }
 
-function enterApp() {
+function enterApp(shouldPromptGps) {
     landingGate.hidden = true;
     currentSettings.showLandingOnOpen = false;
     saveSettings(currentSettings);
     renderAppState();
+
+    if (shouldPromptGps !== false && appState.gps.status !== "active" && appState.gps.status !== "requesting") {
+        window.setTimeout(function() {
+            requestGpsThen(function() {});
+        }, 250);
+    }
 }
 
 function handleAuthSubmit() {
@@ -970,7 +1159,8 @@ function renderSettingsPanel() {
             "<p>Locations Found: " + currentUser.unlockedLocationIds.length + "</p>" +
             "<p>Artifacts Collected: " + currentUser.artifacts.length + "</p>" +
             "<p>Secrets Solved: " + currentUser.secretsSolved + "</p>" +
-            "<p>Captures: " + currentUser.captureHistory.length + " - Visits: " + currentUser.visitHistory.length + "</p>";
+            "<p>Captures: " + currentUser.captureHistory.length + " - Visits: " + currentUser.visitHistory.length + "</p>" +
+            renderProfileMap(currentUser);
     } else {
         settingsAccountStats.textContent = "No account signed in.";
     }
@@ -983,6 +1173,37 @@ function renderSettingsPanel() {
             return "<p>" + (index + 1) + ". <strong>" + escapeHTML(stat.locationName) + "</strong><br>" +
                 escapeHTML(stat.questName) + " · " + stat.points + " pts · " + stat.captures + " captures</p>";
         }).join("");
+}
+
+function renderProfileMap(user) {
+    const unlocked = loadKnownLocations().filter(function(location) {
+        return user.unlockedLocationIds.includes(location.id) ||
+            user.createdLocationIds.includes(location.id) ||
+            isAdminUser(user.username);
+    }).filter(function(location) {
+        return Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+    });
+
+    if (unlocked.length === 0) {
+        return "<div class='profileMap'><small>No unlocked map markers yet.</small></div>";
+    }
+
+    const latitudes = unlocked.map(function(location) { return Number(location.latitude); });
+    const longitudes = unlocked.map(function(location) { return Number(location.longitude); });
+    const minLat = Math.min.apply(null, latitudes);
+    const maxLat = Math.max.apply(null, latitudes);
+    const minLng = Math.min.apply(null, longitudes);
+    const maxLng = Math.max.apply(null, longitudes);
+    const latSpan = Math.max(maxLat - minLat, 0.0001);
+    const lngSpan = Math.max(maxLng - minLng, 0.0001);
+    const markers = unlocked.map(function(location) {
+        const x = ((Number(location.longitude) - minLng) / lngSpan) * 82 + 9;
+        const y = (1 - ((Number(location.latitude) - minLat) / latSpan)) * 72 + 12;
+
+        return "<span class='profileMapMarker' title='" + escapeHTML(location.name) + "' style='left:" + x.toFixed(1) + "%;top:" + y.toFixed(1) + "%'></span>";
+    }).join("");
+
+    return "<div class='profileMap'><strong>Unlocked Map</strong>" + markers + "</div>";
 }
 
 function saveSettingsFromPanel() {
