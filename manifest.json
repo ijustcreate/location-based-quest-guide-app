@@ -1,11 +1,11 @@
 {
   "name": "Quest Compass",
-  "short_name": "Quest",
-  "start_url": ".",
-  "scope": ".",
+  "short_name": "Quest Compass",
+  "description": "A local-first location-based glyph quest app.",
+  "start_url": "./",
   "display": "standalone",
-  "background_color": "#050814",
-  "theme_color": "#050814",
+  "background_color": "#081014",
+  "theme_color": "#101820",
   "icons": [
     {
       "src": "icon.svg",

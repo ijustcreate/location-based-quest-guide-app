@@ -1,567 +1,192 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#050814">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-    <title>Quest Compass</title>
-
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101820" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Quest Compass" />
+  <title>Quest Compass 0.7</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
+  <div id="landingPrompt" class="landing-prompt">
+    <div class="landing-card">
+      <div class="landing-glyph">△</div>
+      <h1>Have you found a glyph?</h1>
+      <p>Open the scanner when you are standing in front of a quest marker.</p>
+      <button id="landingScanButton" class="primary-button">Yes — scan it</button>
+      <button id="landingEnterButton" class="ghost-button">Enter Full Site</button>
+    </div>
+  </div>
 
-    <section id="landingGate" class="landingGate">
-        <div class="landingPanel">
-            <div class="landingMark">△</div>
-            <h1>Have you found a symbol?</h1>
-            <p>Open the scanner when you are standing in front of a quest marker.</p>
+  <main class="app-shell">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Quest Compass</p>
+        <h1>Glyph Hunt 0.7</h1>
+      </div>
 
-            <button id="foundSymbolButton" class="primaryButton" type="button">
-                Yes
-            </button>
+      <div class="status-pill" id="appStateLabel">Trail Idle</div>
+    </header>
 
-            <button id="enterSiteButton" class="secondaryButton" type="button">
-                Enter Full Site
-            </button>
-
-            <form id="authForm" class="authForm" hidden>
-                <label for="usernameInput">Username</label>
-                <input id="usernameInput" maxlength="13" autocomplete="username" placeholder="1 to 13 characters">
-
-                <label for="passwordInput">Password</label>
-                <input id="passwordInput" type="password" autocomplete="current-password" placeholder="Blank is allowed">
-
-                <button class="primaryButton" type="submit">
-                    Enter
-                </button>
-
-                <p id="authMessage" class="authMessage"></p>
-            </form>
-        </div>
+    <section class="control-rail">
+      <button id="gpsButton" class="rail-button">📍 GPS</button>
+      <button id="compassButton" class="rail-button">🧭 Compass</button>
+      <button id="quickScanButton" class="rail-button">△ Scan</button>
+      <button id="adminButton" class="rail-button">⚙️ Admin</button>
     </section>
 
-    <div class="appShell">
-
-        <header class="appHeader">
-
-            <div class="titleRow">
-                <div class="appIcon">🧭</div>
-
-                <div class="titleText">
-                    <h1>Quest Compass</h1>
-                    <p id="modeSubtitle" class="modeSubtitle">Trail Idle</p>
-                </div>
-
-                <button id="settingsButton" class="iconButton" type="button">
-                    ⚙️
-                </button>
-            </div>
-
-            <div class="statusGrid">
-
-                <button id="gpsChip" class="statusChip" type="button" aria-label="Enable GPS">
-                    <span class="chipIcon">📍</span>
-                    <span>
-                        <strong>GPS</strong>
-                        <small id="gpsChipText">Off</small>
-                    </span>
-                </button>
-
-                <button id="compassChip" class="statusChip" type="button" aria-label="Enable compass">
-                    <span class="chipIcon">🧭</span>
-                    <span>
-                        <strong>Compass</strong>
-                        <small id="compassChipText">Off</small>
-                    </span>
-                </button>
-
-                <button id="scannerChip" class="statusChip" type="button" aria-label="Open scanner">
-                    <span class="chipIcon">🔺</span>
-                    <span>
-                        <strong>Scanner</strong>
-                        <small id="scannerChipText">Off</small>
-                    </span>
-                </button>
-
-                <button id="targetChip" class="statusChip" type="button" aria-label="Open library">
-                    <span class="chipIcon">🎯</span>
-                    <span>
-                        <strong>Target</strong>
-                        <small id="targetChipText">None</small>
-                    </span>
-                </button>
-
-            </div>
-
-            <select id="headerLocationSelect" class="headerLocationSelect" aria-label="Saved location" hidden>
-                <option value="">No saved places</option>
-            </select>
-
-            <div id="accountBar" class="accountBar">
-                <span id="accountName">Guest</span>
-                <span id="accountResources">R1 0 · R2 0 · R3 0 · R4 0</span>
-            </div>
-
-            <div id="settingsPanel" class="settingsPanel" hidden>
-                <div class="settingsHeader">
-                    <div>
-                        <div class="sectionLabel">SETTINGS</div>
-                        <h2>Field Controls</h2>
-                    </div>
-                    <button id="closeSettingsButton" class="miniButton" type="button">Close</button>
-                </div>
-
-                <div class="settingsGrid">
-                    <label><input id="settingHighAccuracyGps" type="checkbox"> High accuracy GPS</label>
-                    <label><input id="settingAutoStartScanner" type="checkbox"> Auto-start scanner after symbol prompt</label>
-                    <label><input id="settingSoundCues" type="checkbox"> Sound cues</label>
-                    <label><input id="settingHapticCues" type="checkbox"> Haptic cues</label>
-                    <label><input id="settingShowTechnicalDetails" type="checkbox"> Show technical location details</label>
-                    <label><input id="settingHideExactCoordinates" type="checkbox"> Hide exact coordinates by default</label>
-                </div>
-
-                <div class="settingsInputs">
-                    <label for="settingScannerSensitivity">Scanner sensitivity</label>
-                    <select id="settingScannerSensitivity">
-                        <option value="strict">Strict</option>
-                        <option value="balanced">Balanced</option>
-                        <option value="generous">Generous</option>
-                    </select>
-
-                    <label for="settingAttuneThreshold">Attune threshold</label>
-                    <input id="settingAttuneThreshold" type="number" min="50" max="100">
-
-                    <label for="settingRewardResource1">Reward resource 1</label>
-                    <input id="settingRewardResource1" type="number" min="0">
-
-                    <label for="settingRewardResource2">Reward resource 2</label>
-                    <input id="settingRewardResource2" type="number" min="0">
-                </div>
-
-                <div class="settingsActions">
-                    <button id="saveSettingsButton" class="primaryButton" type="button">Save Settings</button>
-                    <button id="resetLandingButton" class="secondaryButton" type="button">Show Landing Again</button>
-                    <button id="settingsClearButton" class="dangerButton" type="button">Clear All Locations</button>
-                </div>
-
-                <div class="statsPanel">
-                    <div class="sectionLabel">ACCOUNT</div>
-                    <div id="settingsAccountStats" class="statsText"></div>
-
-                    <div class="sectionLabel">POPULAR QUESTS</div>
-                    <div id="popularQuestStats" class="statsText"></div>
-
-                    <div id="adminTools" class="adminTools" hidden>
-                        <div class="sectionLabel">FELIX ADMIN</div>
-                        <button id="exportDataButton" class="secondaryButton" type="button">Export Quest Data</button>
-                        <button id="importDataButton" class="secondaryButton" type="button">Import Quest Data</button>
-                        <button id="resetDebugButton" class="dangerButton" type="button">Reset Quest Debug Data</button>
-                    </div>
-                </div>
-            </div>
-
-        </header>
-
-        <main>
-
-            <section id="trailPanel" class="modePanel activePanel">
-
-                <div class="compassCard">
-
-                    <div class="compassDial">
-
-                        <div class="cardinal north">N</div>
-                        <div class="cardinal east">E</div>
-                        <div class="cardinal south">S</div>
-                        <div class="cardinal west">W</div>
-
-                        <div id="directionArrow" class="directionArrow">
-                            ▲
-                        </div>
-
-                        <div id="bearingReadout" class="bearingReadout">
-                            No target
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <div class="targetCard">
-
-                    <div class="targetIcon">🌳</div>
-
-                    <div class="targetMain">
-                        <div class="sectionLabel">ACTIVE TARGET</div>
-                        <h2 id="trailTargetName">No Active Trail</h2>
-                        <p id="trailTargetHint">Choose a saved place from Library.</p>
-                    </div>
-
-                    <div class="targetStats">
-                        <small>Distance</small>
-                        <strong id="trailDistance">--</strong>
-                        <small id="trailAccuracy">Accuracy unknown</small>
-                    </div>
-
-                </div>
-
-                <div class="glyphProgressCard">
-                    <div>
-                        <div class="sectionLabel">GLYPH OBJECTIVES</div>
-                        <strong id="glyphProgressText">Glyphs Found: 0 / 0</strong>
-                    </div>
-                    <button id="foundGlyphButton" class="primaryButton" type="button">
-                        I Found The Symbol
-                    </button>
-                </div>
-
-                <div class="actionGrid">
-
-                    <button id="trailGpsButton" class="actionTile greenAction" type="button">
-                        <span>📍</span>
-                        <strong>Enable GPS</strong>
-                        <small>Get location fix</small>
-                    </button>
-
-                    <button id="trailCompassButton" class="actionTile blueAction" type="button">
-                        <span>🧭</span>
-                        <strong>Enable Compass</strong>
-                        <small>Calibrate heading</small>
-                    </button>
-
-                    <button id="trailScannerButton" class="actionTile purpleAction" type="button">
-                        <span>🔺</span>
-                        <strong>Open Scanner</strong>
-                        <small>Detect markers</small>
-                    </button>
-
-                    <button id="trailSaveButton" class="actionTile goldAction" type="button">
-                        <span>🔖</span>
-                        <strong>Save This Place</strong>
-                        <small>Bookmark location</small>
-                    </button>
-
-                </div>
-
-                <div class="readoutCard">
-                    <div id="gpsReadout">GPS inactive.</div>
-                    <div id="headingReadout">Compass inactive.</div>
-                    <div id="navigationReadout">No navigation target selected.</div>
-                </div>
-
-            </section>
-
-            <section id="scanPanel" class="modePanel">
-
-                <div class="scannerCard">
-
-                    <div class="scannerTop">
-                        <div>
-                            <div class="sectionLabel">SIGIL SCAN</div>
-                            <h2>Marker Lens</h2>
-                        </div>
-
-                        <button id="scanCameraButton" class="miniButton" type="button">
-                            Enable Camera
-                        </button>
-                    </div>
-
-                    <div class="cameraFrame">
-                        <div class="liveBadge">● LIVE</div>
-
-                        <video id="cameraVideo" autoplay playsinline muted></video>
-
-                        <canvas id="cameraCanvas"></canvas>
-
-                        <button id="confirmFoundButton" class="confirmFoundButton" type="button" hidden>
-                            Confirm Found
-                        </button>
-
-                        <div id="attunePrompt" class="attunePrompt" hidden>
-                            <button id="attuneButton" class="attuneButton" type="button">
-                                <span>Attune</span>
-                                <small>Hold for 3 seconds</small>
-                            </button>
-
-                            <div class="attuneMeter">
-                                <div id="attuneMeterFill" class="attuneMeterFill"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="markerBanner" class="markerBanner">
-                        <div class="markerIcon">🔺</div>
-                        <div>
-                            <strong id="markerTitle">Scanner sleeping</strong>
-                            <p id="markerMessage">Enable camera to search for a red triangle marker.</p>
-                        </div>
-                    </div>
-
-                    <div class="signalGrid">
-
-                        <div class="signalItem">
-                            <span>Color</span>
-                            <div class="barTrack">
-                                <div id="redSignalBar" class="barFill redFill"></div>
-                            </div>
-                            <strong id="redSignalText">0%</strong>
-                        </div>
-
-                        <div class="signalItem">
-                            <span>Shape</span>
-                            <div class="barTrack">
-                                <div id="shapeMatchBar" class="barFill blueFill"></div>
-                            </div>
-                            <strong id="shapeMatchText">0%</strong>
-                        </div>
-
-                        <div class="signalItem">
-                            <span>Light</span>
-                            <div class="barTrack">
-                                <div id="lightingBar" class="barFill goldFill"></div>
-                            </div>
-                            <strong id="lightingText">0%</strong>
-                        </div>
-
-                        <div class="signalItem">
-                            <span>Stable</span>
-                            <div class="barTrack">
-                                <div id="stabilityBar" class="barFill greenFill"></div>
-                            </div>
-                            <strong id="stabilityText">0%</strong>
-                        </div>
-
-                        <div class="signalItem confidenceItem">
-                            <span>Lock</span>
-                            <div class="barTrack">
-                                <div id="confidenceBar" class="barFill greenFill"></div>
-                            </div>
-                            <strong id="confidenceText">0%</strong>
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <div class="compactTargetCard">
-
-                    <div>
-                        <div class="sectionLabel">CURRENT TARGET</div>
-                        <h2 id="scanTargetName">No target selected</h2>
-                        <p id="scanTargetMeta">Choose a place from Library.</p>
-                    </div>
-
-                    <div class="miniCompass">
-                        ➤
-                    </div>
-
-                </div>
-
-            </section>
-
-            <section id="createPanel" class="modePanel">
-
-                <div class="createCard">
-
-                    <div class="sectionLabel">FORGE QUEST</div>
-
-                    <h2>Save Your Current Place</h2>
-
-                    <div class="mapPreview">
-                        <div class="mapPin">📍</div>
-                    </div>
-
-                    <label for="locationImageInput">Location / Symbol Photo</label>
-                    <input id="locationImageInput" type="file" accept="image/*" capture="environment">
-
-                    <label for="placeNameInput">Place Name</label>
-                    <input id="placeNameInput" type="text" placeholder="Example: Old Oak, Front Door, Hidden Gate">
-
-                    <label for="hintInput">Hint optional</label>
-                    <textarea id="hintInput" placeholder="Example: Look beneath the old oak."></textarea>
-
-                    <label for="questNameInput">Quest / Trail Name</label>
-                    <input id="questNameInput" type="text" placeholder="Example: Old Town Rune Trail">
-
-                    <label for="clueInput">Clue Text</label>
-                    <textarea id="clueInput" placeholder="What should the player learn, read, or solve here?"></textarea>
-
-                    <label for="clueAnswerInput">Optional Answer / Passphrase</label>
-                    <input id="clueAnswerInput" type="text" placeholder="Blank means scanner capture is enough">
-
-                    <label for="rewardTextInput">Reward Text</label>
-                    <textarea id="rewardTextInput" placeholder="Example: The mark warms. You gain one trail point."></textarea>
-
-                    <label for="rewardTypeSelect">Reward Type</label>
-                    <select id="rewardTypeSelect">
-                        <option value="lore-page">Lore Page</option>
-                        <option value="creature-card">Creature Card</option>
-                        <option value="treasure">Treasure</option>
-                        <option value="badge">Badge</option>
-                        <option value="artifact">Artifact</option>
-                        <option value="puzzle-piece">Puzzle Piece</option>
-                        <option value="story-fragment">Story Fragment</option>
-                    </select>
-
-                    <label for="rewardRaritySelect">Reward Rarity</label>
-                    <select id="rewardRaritySelect">
-                        <option value="Common">Common</option>
-                        <option value="Rare">Rare</option>
-                        <option value="Epic">Epic</option>
-                        <option value="Legendary">Legendary</option>
-                    </select>
-
-                    <div class="glyphBuilder">
-                        <div class="sectionLabel">GLYPH OBJECTIVES</div>
-                        <p>Add the symbols players must scan at this location.</p>
-
-                        <div class="glyphObjectiveRow">
-                            <label for="glyphColor1">Glyph 1</label>
-                            <select id="glyphColor1" class="glyphColorSelect">
-                                <option value="red">Red</option>
-                                <option value="green">Green</option>
-                                <option value="pink">Pink</option>
-                                <option value="blue">Blue</option>
-                            </select>
-                            <select id="glyphShape1" class="glyphShapeSelect">
-                                <option value="hollow-triangle">Triangle</option>
-                                <option value="hollow-circle">Circle</option>
-                                <option value="hollow-square">Square</option>
-                            </select>
-                            <input id="glyphIcon1" type="file" accept="image/*" capture="environment" aria-label="Glyph 1 icon photo">
-                            <label><input id="glyphRequired1" type="checkbox" checked> Required</label>
-                        </div>
-
-                        <div class="glyphObjectiveRow">
-                            <label for="glyphColor2">Glyph 2</label>
-                            <select id="glyphColor2" class="glyphColorSelect">
-                                <option value="">None</option>
-                                <option value="red">Red</option>
-                                <option value="green">Green</option>
-                                <option value="pink">Pink</option>
-                                <option value="blue">Blue</option>
-                            </select>
-                            <select id="glyphShape2" class="glyphShapeSelect">
-                                <option value="hollow-triangle">Triangle</option>
-                                <option value="hollow-circle">Circle</option>
-                                <option value="hollow-square">Square</option>
-                            </select>
-                            <input id="glyphIcon2" type="file" accept="image/*" capture="environment" aria-label="Glyph 2 icon photo">
-                            <label><input id="glyphRequired2" type="checkbox" checked> Required</label>
-                        </div>
-
-                        <div class="glyphObjectiveRow">
-                            <label for="glyphColor3">Glyph 3</label>
-                            <select id="glyphColor3" class="glyphColorSelect">
-                                <option value="">None</option>
-                                <option value="red">Red</option>
-                                <option value="green">Green</option>
-                                <option value="pink">Pink</option>
-                                <option value="blue">Blue</option>
-                            </select>
-                            <select id="glyphShape3" class="glyphShapeSelect">
-                                <option value="hollow-triangle">Triangle</option>
-                                <option value="hollow-circle">Circle</option>
-                                <option value="hollow-square">Square</option>
-                            </select>
-                            <input id="glyphIcon3" type="file" accept="image/*" capture="environment" aria-label="Glyph 3 icon photo">
-                            <label><input id="glyphRequired3" type="checkbox" checked> Required</label>
-                        </div>
-                    </div>
-
-                    <label for="chainNextLocationSelect">Next Location In Chain</label>
-                    <select id="chainNextLocationSelect">
-                        <option value="">No next location yet</option>
-                    </select>
-
-                    <div id="createGpsReadout" class="fieldReadout">
-                        Enable GPS to capture this place.
-                    </div>
-
-                    <button id="createSaveButton" class="primaryButton" type="button">
-                        Save This Place
-                    </button>
-
-                    <button id="createSaveFollowButton" class="secondaryButton" type="button">
-                        Save + Follow
-                    </button>
-
-                </div>
-
-            </section>
-
-            <section id="libraryPanel" class="modePanel">
-
-                <div class="libraryHeader">
-                    <div>
-                        <div class="sectionLabel">FIELD NOTES</div>
-                        <h2>Saved Locations</h2>
-                    </div>
-
-                    <button id="clearButton" class="dangerMiniButton hiddenControl" type="button">
-                        Clear All
-                    </button>
-                </div>
-
-                <div class="libraryTabs">
-                    <button class="libraryTab activeLibraryTab" data-library-view="mine" type="button">My Places</button>
-                    <button class="libraryTab" data-library-view="public" type="button">Public Quests Near Me</button>
-                    <button class="libraryTab" data-library-view="shared" type="button">Shared With Me</button>
-                    <button class="libraryTab" data-library-view="users" type="button">Users</button>
-                </div>
-
-                <div id="savedLocations" class="savedList"></div>
-
-            </section>
-
-        </main>
-
-        <nav class="bottomNav">
-
-            <button class="navButton activeNav" data-mode="trail" type="button">
-                <span>⛰️</span>
-                Trail
-            </button>
-
-            <button class="navButton" data-mode="scan" type="button">
-                <span>◎</span>
-                Scan
-            </button>
-
-            <button class="navButton" data-mode="create" type="button">
-                <span>✍️</span>
-                Create
-            </button>
-
-            <button class="navButton" data-mode="library" type="button">
-                <span>📖</span>
-                Library
-            </button>
-
-        </nav>
-
-    </div>
-
-    <div id="modalOverlay" class="modalOverlay" hidden>
-        <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-            <h2 id="modalTitle">Notice</h2>
-            <p id="modalMessage"></p>
-            <div id="modalActions" class="modalActions"></div>
+    <section id="trailTab" class="tab-panel active">
+      <div class="compass-card">
+        <div class="compass-ring">
+          <div id="compassArrow" class="compass-arrow">➤</div>
+          <div class="compass-core">N</div>
         </div>
-    </div>
 
-    <script src="storage.js"></script>
-    <script src="navigation.js"></script>
-    <script src="camera.js"></script>
-    <script src="app.js"></script>
+        <div class="trail-readout">
+          <h2 id="targetName">No active quest</h2>
+          <p id="targetHint">Choose a saved quest location or create one.</p>
+          <div class="metric-grid">
+            <div>
+              <span>Distance</span>
+              <strong id="distanceValue">—</strong>
+            </div>
+            <div>
+              <span>Bearing</span>
+              <strong id="bearingValue">—</strong>
+            </div>
+            <div>
+              <span>Accuracy</span>
+              <strong id="accuracyValue">—</strong>
+            </div>
+            <div>
+              <span>Points</span>
+              <strong id="pointsValue">0</strong>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      <div id="activeQuestCard" class="card"></div>
+
+      <button id="foundSymbolButton" class="primary-button full-width">I found the symbol</button>
+    </section>
+
+    <section id="scanTab" class="tab-panel">
+      <div class="scanner-card">
+        <div class="scanner-frame">
+          <video id="scannerVideo" playsinline muted></video>
+          <canvas id="scannerCanvas"></canvas>
+          <div class="scanner-reticle">△</div>
+        </div>
+
+        <div class="scanner-hud">
+          <h2 id="scannerTitle">Scanner idle</h2>
+          <p id="scannerMessage">Start the scanner and point it at a colored hollow triangle glyph.</p>
+
+          <div class="meter-row"><span>Color</span><meter id="colorMeter" min="0" max="100" value="0"></meter></div>
+          <div class="meter-row"><span>Shape</span><meter id="shapeMeter" min="0" max="100" value="0"></meter></div>
+          <div class="meter-row"><span>Light</span><meter id="lightMeter" min="0" max="100" value="0"></meter></div>
+          <div class="meter-row"><span>Stable</span><meter id="stableMeter" min="0" max="100" value="0"></meter></div>
+          <div class="meter-row"><span>Lock</span><meter id="lockMeter" min="0" max="100" value="0"></meter></div>
+
+          <div id="scannerMatchCard" class="mini-card"></div>
+
+          <div class="button-row">
+            <button id="startScannerButton" class="primary-button">Start Scanner</button>
+            <button id="stopScannerButton" class="danger-button">Stop</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="createTab" class="tab-panel">
+      <div class="card">
+        <h2>Create quest location</h2>
+        <p class="muted">Stand at the spot, enable GPS, then assign one or more glyph objectives.</p>
+
+        <label>
+          Place name
+          <input id="placeNameInput" type="text" placeholder="Old Oak Shrine" />
+        </label>
+
+        <label>
+          Clue / hint
+          <textarea id="placeHintInput" rows="3" placeholder="Look where roots become claws."></textarea>
+        </label>
+
+        <div class="glyph-builder">
+          <h3>Glyph objectives</h3>
+
+          <label class="check-row">
+            <input id="glyphRed" type="checkbox" checked />
+            <span class="glyph-dot red"></span>
+            Red hollow triangle
+          </label>
+
+          <label class="check-row">
+            <input id="glyphGreen" type="checkbox" />
+            <span class="glyph-dot green"></span>
+            Green hollow triangle
+          </label>
+
+          <label class="check-row">
+            <input id="glyphPink" type="checkbox" />
+            <span class="glyph-dot pink"></span>
+            Pink hollow triangle
+          </label>
+
+          <label class="check-row">
+            <input id="glyphBlue" type="checkbox" />
+            <span class="glyph-dot blue"></span>
+            Blue hollow triangle
+          </label>
+
+          <label>
+            Points per glyph
+            <input id="glyphPointsInput" type="number" min="10" max="500" step="10" value="50" />
+          </label>
+
+          <label class="check-row">
+            <input id="evidenceRequiredInput" type="checkbox" checked />
+            Require scanner snapshot evidence
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button id="savePlaceButton" class="primary-button">Save Quest</button>
+          <button id="saveFollowButton" class="secondary-button">Save + Follow</button>
+        </div>
+
+        <p id="createStatus" class="muted"></p>
+      </div>
+    </section>
+
+    <section id="libraryTab" class="tab-panel">
+      <div class="card">
+        <h2>Quest library</h2>
+        <select id="locationSelect"></select>
+        <div id="libraryDetails"></div>
+      </div>
+    </section>
+
+    <nav class="bottom-nav">
+      <button data-tab="trailTab" class="nav-button active">🧭 Trail</button>
+      <button data-tab="scanTab" class="nav-button">△ Scan</button>
+      <button data-tab="createTab" class="nav-button">＋ Create</button>
+      <button data-tab="libraryTab" class="nav-button">📚 Library</button>
+    </nav>
+  </main>
+
+  <div id="modalRoot" class="modal-root hidden"></div>
+
+  <script src="navigation.js"></script>
+  <script src="storage.js"></script>
+  <script src="camera.js"></script>
+  <script src="app.js"></script>
 </body>
-
 </html>
