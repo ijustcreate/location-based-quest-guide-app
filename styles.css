@@ -219,6 +219,24 @@ h1 {
     display: block;
 }
 
+.trailScannerOverlay #scanPanel {
+    position: fixed;
+    inset: calc(72px + env(safe-area-inset-top)) 10px calc(var(--bottom-nav-height) + 18px + var(--safe-bottom)) 10px;
+    z-index: 180;
+    display: block;
+    overflow: auto;
+    padding: 14px;
+    border-radius: 24px;
+    background: rgba(5, 8, 20, 0.94);
+    border: 1px solid rgba(119, 173, 255, 0.24);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(16px);
+}
+
+.trailScannerOverlay .appHeader {
+    z-index: 190;
+}
+
 /* General cards */
 .compassCard,
 .targetCard,
@@ -357,6 +375,26 @@ h1 {
     box-shadow: 0 0 26px rgba(94, 255, 143, 0.22);
     overflow: hidden;
     cursor: pointer;
+}
+
+.glyphProgressCard {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 18px;
+    background: rgba(13, 20, 38, 0.78);
+    border: 1px solid rgba(119, 173, 255, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.glyphProgressCard .primaryButton {
+    width: auto;
+    min-width: 156px;
+    margin: 0;
+    white-space: normal;
 }
 
 .locationImageThumb {
@@ -819,6 +857,92 @@ textarea {
     grid-template-columns: 1fr 0.8fr auto;
     gap: 10px;
     margin-top: 14px;
+}
+
+.glyphBuilder {
+    margin-top: 16px;
+    padding: 14px;
+    border-radius: 16px;
+    background: rgba(9, 14, 26, 0.82);
+    border: 1px solid rgba(119, 173, 255, 0.16);
+}
+
+.glyphBuilder p {
+    margin: 6px 0 12px;
+    color: #9fb0cc;
+}
+
+.glyphObjectiveRow {
+    display: grid;
+    grid-template-columns: 72px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.glyphObjectiveRow label {
+    margin: 0;
+}
+
+.glyphObjectiveRow input[type="checkbox"] {
+    width: auto;
+}
+
+.libraryTabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.libraryTab {
+    padding: 10px 8px;
+    border-radius: 12px;
+    background: rgba(13, 20, 38, 0.78);
+    color: #b8c7df;
+    border: 1px solid rgba(119, 173, 255, 0.14);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.activeLibraryTab {
+    background: rgba(84, 132, 234, 0.32);
+    color: white;
+    border-color: rgba(119, 173, 255, 0.5);
+}
+
+.glyphObjectiveList {
+    display: grid;
+    gap: 8px;
+    padding: 0;
+    margin: 12px 0;
+    list-style: none;
+}
+
+.glyphObjectiveList li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(8, 13, 25, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+}
+
+.glyphObjectiveList .glyphComplete {
+    border-color: rgba(94, 255, 143, 0.42);
+    background: rgba(31, 91, 60, 0.25);
+}
+
+.adminTools {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.adminTools[hidden] {
+    display: none;
 }
 
 .followButton {

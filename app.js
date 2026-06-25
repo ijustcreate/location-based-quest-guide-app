@@ -29,7 +29,8 @@ const appState = {
     },
     target: {
         savedPlaceId: null
-    }
+    },
+    scannerOverlay: false
 };
 
 let activeTarget = null;
@@ -42,6 +43,7 @@ let attuneHoldTimer = null;
 let attuneCompleted = false;
 let pendingLocationImageDataUrl = "";
 let lastScannerCueStatus = "";
+let libraryView = "mine";
 
 const modeSubtitle = document.getElementById("modeSubtitle");
 const headerLocationSelect = document.getElementById("headerLocationSelect");
@@ -61,6 +63,10 @@ const saveSettingsButton = document.getElementById("saveSettingsButton");
 const resetLandingButton = document.getElementById("resetLandingButton");
 const settingsAccountStats = document.getElementById("settingsAccountStats");
 const popularQuestStats = document.getElementById("popularQuestStats");
+const adminTools = document.getElementById("adminTools");
+const exportDataButton = document.getElementById("exportDataButton");
+const importDataButton = document.getElementById("importDataButton");
+const resetDebugButton = document.getElementById("resetDebugButton");
 
 const gpsChip = document.getElementById("gpsChip");
 const compassChip = document.getElementById("compassChip");
@@ -84,6 +90,8 @@ const trailTargetName = document.getElementById("trailTargetName");
 const trailTargetHint = document.getElementById("trailTargetHint");
 const trailDistance = document.getElementById("trailDistance");
 const trailAccuracy = document.getElementById("trailAccuracy");
+const glyphProgressText = document.getElementById("glyphProgressText");
+const foundGlyphButton = document.getElementById("foundGlyphButton");
 
 const scanTargetName = document.getElementById("scanTargetName");
 const scanTargetMeta = document.getElementById("scanTargetMeta");
@@ -99,6 +107,12 @@ const rewardRaritySelect = document.getElementById("rewardRaritySelect");
 const chainNextLocationSelect = document.getElementById("chainNextLocationSelect");
 const locationImageInput = document.getElementById("locationImageInput");
 const locationImageButton = document.querySelector(".mapPin");
+const glyphColor1 = document.getElementById("glyphColor1");
+const glyphColor2 = document.getElementById("glyphColor2");
+const glyphColor3 = document.getElementById("glyphColor3");
+const glyphRequired1 = document.getElementById("glyphRequired1");
+const glyphRequired2 = document.getElementById("glyphRequired2");
+const glyphRequired3 = document.getElementById("glyphRequired3");
 
 const cameraVideo = document.getElementById("cameraVideo");
 const cameraCanvas = document.getElementById("cameraCanvas");
@@ -160,6 +174,14 @@ document.getElementById("trailSaveButton").addEventListener("click", function() 
     setMode("create");
 });
 
+foundGlyphButton.addEventListener("click", function() {
+    appState.scannerOverlay = true;
+    setMode("scan");
+    if (appState.scanner.status === "off" || appState.scanner.status === "error") {
+        enableScanner();
+    }
+});
+
 document.getElementById("scanCameraButton").addEventListener("click", enableScanner);
 
 document.getElementById("createSaveButton").addEventListener("click", function() {
@@ -194,6 +216,48 @@ resetLandingButton.addEventListener("click", function() {
     landingGate.hidden = false;
 });
 
+exportDataButton.addEventListener("click", function() {
+    showModal({
+        title: "Export Quest Data",
+        message: exportQuestData(),
+        actions: [
+            { label: "Close", className: "primaryButton", onClick: hideModal }
+        ]
+    });
+});
+
+importDataButton.addEventListener("click", function() {
+    const json = window.prompt("Paste exported Quest Compass data");
+
+    if (!json) {
+        return;
+    }
+
+    try {
+        importQuestData(json);
+        currentUser = getCurrentUser();
+        renderLocations();
+        renderAppState();
+        showModal({
+            title: "Import Complete",
+            message: "Quest data imported.",
+            actions: [{ label: "OK", className: "primaryButton", onClick: hideModal }]
+        });
+    } catch (error) {
+        showModal({
+            title: "Import Failed",
+            message: error.message,
+            actions: [{ label: "OK", className: "primaryButton", onClick: hideModal }]
+        });
+    }
+});
+
+resetDebugButton.addEventListener("click", function() {
+    resetQuestDebugData();
+    renderLocations();
+    renderSettingsPanel();
+});
+
 foundSymbolButton.addEventListener("click", function() {
     enterApp();
     setMode("scan");
@@ -204,13 +268,19 @@ foundSymbolButton.addEventListener("click", function() {
 });
 
 enterSiteButton.addEventListener("click", function() {
-    authForm.hidden = !authForm.hidden;
-    usernameInput.focus();
+    enterApp();
 });
 
 authForm.addEventListener("submit", function(event) {
     event.preventDefault();
     handleAuthSubmit();
+});
+
+document.querySelectorAll(".libraryTab").forEach(function(button) {
+    button.addEventListener("click", function() {
+        libraryView = button.dataset.libraryView;
+        renderLocations();
+    });
 });
 
 attuneButton.addEventListener("pointerdown", startAttuneHold);
@@ -232,6 +302,10 @@ modalOverlay.addEventListener("click", function(event) {
 });
 
 function setMode(mode) {
+    if (mode !== "scan") {
+        appState.scannerOverlay = false;
+    }
+
     appState.activeTab = mode;
 
     document.querySelectorAll(".modePanel").forEach(function(panel) {
@@ -246,6 +320,7 @@ function setMode(mode) {
     document.querySelector("[data-mode='" + mode + "']").classList.add("activeNav");
 
     document.body.classList.toggle("scanActive", mode === "scan" && appState.scanner.status !== "off");
+    document.body.classList.toggle("trailScannerOverlay", appState.scannerOverlay && mode === "scan");
 
     if (mode === "library") {
         renderLocations();
@@ -364,6 +439,8 @@ function updateScannerUI(result) {
     appState.scanner.lightQuality = result.lightQuality || 0;
     appState.scanner.frameStability = result.frameStability || 0;
     appState.scanner.lockConfidence = result.lockConfidence || 0;
+    appState.scanner.colorFamily = result.colorFamily || "";
+    appState.scanner.shape = result.shape || "";
     appState.scanner.lockedAt = result.confirmed ? appState.scanner.lockedAt || new Date().toISOString() : null;
     appState.scanner.error = result.status === "error" ? result.message : null;
 
@@ -377,11 +454,58 @@ function updateScannerUI(result) {
     updateBar(lightQualityBar, lightQualityText, appState.scanner.lightQuality);
     updateBar(frameStabilityBar, frameStabilityText, appState.scanner.frameStability);
     updateBar(confidenceBar, confidenceText, appState.scanner.lockConfidence);
+    handleGlyphScanResult(result);
     updateConfirmFoundButton();
     playScannerCue(appState.scanner.status);
     updateAttuneAvailability();
 
     renderAppState();
+}
+
+function handleGlyphScanResult(result) {
+    if (!result.confirmed || !activeTarget) {
+        return;
+    }
+
+    const pendingObjectives = activeTarget.glyphObjectives.filter(function(objective) {
+        return objective.status !== "complete";
+    });
+    const matchedObjective = pendingObjectives.find(function(objective) {
+        return objective.shape === (result.shape || "hollow-triangle") &&
+            objective.colorFamily === result.colorFamily &&
+            Number(result.lockConfidence || 0) >= Number(objective.minConfidence || 72);
+    });
+
+    if (!matchedObjective) {
+        markerTitle.textContent = "Glyph mismatch";
+        markerMessage.textContent = "This " + (result.colorFamily || "unknown") + " glyph is not assigned to " + activeTarget.name + ".";
+        playSoundCue("wrongSymbol");
+        return;
+    }
+
+    const sighting = {
+        username: getCurrentUsername() || "guest",
+        capturedAt: new Date().toISOString(),
+        confidence: Number(result.lockConfidence || 0),
+        colorFamily: result.colorFamily,
+        shape: result.shape || "hollow-triangle",
+        evidenceRequirement: matchedObjective.evidenceRequirement,
+        imageDataUrl: cameraCanvas.toDataURL ? cameraCanvas.toDataURL("image/jpeg", 0.76) : ""
+    };
+    const completion = completeGlyphObjective(activeTarget.id, matchedObjective.id, sighting);
+
+    if (!completion) {
+        return;
+    }
+
+    activeTarget = completion.location;
+    currentUser = getCurrentUser();
+    renderLocations();
+    renderSettingsPanel();
+    renderAppState();
+    markerTitle.textContent = "Glyph captured";
+    markerMessage.textContent = matchedObjective.label + " completed. +" + completion.awardedPoints + " points.";
+    playSoundCue("questComplete");
 }
 
 function updateConfirmFoundButton() {
@@ -554,6 +678,7 @@ function savePlace(shouldFollow) {
         rewardRarity: rewardRaritySelect.value,
         questName: questNameInput.value.trim() || "Field Quest",
         chainNextLocationId: chainNextLocationSelect.value || "",
+        glyphObjectives: buildGlyphObjectivesFromForm(),
         imageDataUrl: pendingLocationImageDataUrl,
         latitude: appState.gps.latitude,
         longitude: appState.gps.longitude,
@@ -563,7 +688,18 @@ function savePlace(shouldFollow) {
         updatedAt: new Date().toISOString()
     };
 
-    addLocation(newLocation);
+    try {
+        addLocation(newLocation);
+    } catch (error) {
+        showModal({
+            title: "Save Failed",
+            message: error.message || "This place could not be saved. Check browser storage permissions.",
+            actions: [
+                { label: "OK", className: "primaryButton", onClick: hideModal }
+            ]
+        });
+        return;
+    }
 
     placeNameInput.value = "";
     hintInput.value = "";
@@ -574,6 +710,12 @@ function savePlace(shouldFollow) {
     rewardRaritySelect.value = "Common";
     questNameInput.value = "";
     chainNextLocationSelect.value = "";
+    glyphColor1.value = "red";
+    glyphColor2.value = "";
+    glyphColor3.value = "";
+    glyphRequired1.checked = true;
+    glyphRequired2.checked = true;
+    glyphRequired3.checked = true;
     pendingLocationImageDataUrl = "";
     locationImageInput.value = "";
     locationImageButton.classList.remove("hasImage");
@@ -592,18 +734,45 @@ function savePlace(shouldFollow) {
     setMode("library");
 }
 
+function buildGlyphObjectivesFromForm() {
+    return [
+        { colorSelect: glyphColor1, requiredInput: glyphRequired1 },
+        { colorSelect: glyphColor2, requiredInput: glyphRequired2 },
+        { colorSelect: glyphColor3, requiredInput: glyphRequired3 }
+    ].filter(function(row) {
+        return row.colorSelect.value;
+    }).map(function(row, index) {
+        return {
+            label: row.colorSelect.value + " hollow triangle",
+            shape: "hollow-triangle",
+            colorFamily: row.colorSelect.value,
+            required: row.requiredInput.checked,
+            points: index === 0 ? 2 : 1,
+            evidenceRequirement: "photo",
+            minConfidence: Number(currentSettings.attuneThreshold || 72),
+            status: "pending"
+        };
+    });
+}
+
 function renderLocations() {
     const container = document.getElementById("savedLocations");
-    const locations = loadLocations();
+    const locations = getLocationsForLibraryView();
 
-    renderLibrarySelect(locations);
-    renderChainSelect(locations);
+    renderLibraryTabs();
+    renderLibrarySelect(loadLocations());
+    renderChainSelect(loadLocations());
 
     container.innerHTML = "";
 
+    if (libraryView === "users") {
+        renderUsersView(container);
+        return;
+    }
+
     if (locations.length === 0) {
         container.innerHTML =
-            "<div class='locationCard'><h3>No saved places yet.</h3><p>Use Create to save your first location.</p></div>";
+            "<div class='locationCard'><h3>No locations here yet.</h3><p>Use Create to save your first glyph quest.</p></div>";
 
         return;
     }
@@ -620,6 +789,52 @@ function renderLocations() {
     });
 
     renderLocationDetail(container, selectedLocation);
+}
+
+function renderUsersView(container) {
+    const accounts = loadAccounts();
+
+    container.innerHTML = accounts.map(function(account) {
+        return "<div class='locationCard userCard'>" +
+            "<div class='sectionLabel'>USER</div>" +
+            "<h3>" + escapeHTML(account.username) + (isAdminUser(account.username) ? " · Admin" : "") + "</h3>" +
+            "<p>Explorer Rank " + getExplorerRank(account) + "</p>" +
+            "<p>Locations Found: " + account.unlockedLocationIds.length +
+            "<br>Artifacts: " + account.artifacts.length +
+            "<br>Points: " + account.points + "</p>" +
+            "</div>";
+    }).join("");
+}
+
+function getLocationsForLibraryView() {
+    const all = loadLocations();
+    const username = getCurrentUsername();
+
+    if (libraryView === "public") {
+        return loadPublicLocations().filter(function(location) {
+            return location.visibility === "public";
+        });
+    }
+
+    if (libraryView === "shared") {
+        return all.filter(function(location) {
+            return location.creatorUsername !== username && location.visibility !== "private";
+        });
+    }
+
+    if (libraryView === "users") {
+        return [];
+    }
+
+    return all.filter(function(location) {
+        return isAdminUser() || !username || location.creatorUsername === username;
+    });
+}
+
+function renderLibraryTabs() {
+    document.querySelectorAll(".libraryTab").forEach(function(button) {
+        button.classList.toggle("activeLibraryTab", button.dataset.libraryView === libraryView);
+    });
 }
 function renderLibrarySelect(locations) {
     headerLocationSelect.innerHTML = "";
@@ -746,6 +961,7 @@ function renderSettingsPanel() {
     document.getElementById("settingRewardResource2").value = currentSettings.rewardResource2;
 
     renderAccountBar();
+    adminTools.hidden = !isAdminUser();
 
     if (currentUser) {
         settingsAccountStats.innerHTML =
@@ -987,6 +1203,15 @@ function renderLocationDetail(container, location) {
         location.visitedBy.map(function(visit) {
             return escapeHTML(visit.username) + " at " + escapeHTML(new Date(visit.visitedAt).toLocaleString());
         }).join("<br>");
+    const glyphList = location.glyphObjectives.map(function(objective) {
+        return "<li class='" + (objective.status === "complete" ? "glyphComplete" : "") + "'>" +
+            "<span>" + escapeHTML(objective.colorFamily) + " " + escapeHTML(objective.shape.replaceAll("-", " ")) + "</span>" +
+            "<strong>" + escapeHTML(objective.status) + " · " + objective.points + " pts</strong>" +
+            "</li>";
+    }).join("");
+    const completedGlyphs = location.glyphObjectives.filter(function(objective) {
+        return objective.status === "complete";
+    }).length;
 
     card.className = "locationCard libraryDetail";
     card.innerHTML =
@@ -1001,6 +1226,9 @@ function renderLocationDetail(container, location) {
         "<small>Answer: " + escapeHTML(location.clueAnswer || "Scanner capture") + "</small>" +
         "</div>" +
         "<div class='libraryMetaGrid'>" +
+        "<div><small>Glyphs Found</small><strong>" + completedGlyphs + " / " + location.glyphObjectives.length + "</strong></div>" +
+        "<div><small>Points</small><strong>" + getGlyphPoints(location) + "</strong></div>" +
+        "<div><small>Creator</small><strong>" + escapeHTML(location.creatorUsername) + "</strong></div>" +
         "<div><small>Status</small><strong>" + escapeHTML(distanceText) + "</strong></div>" +
         "<div><small>Saved</small><strong>" + escapeHTML(createdAt) + "</strong></div>" +
         "<div><small>Accuracy</small><strong>" + Math.round(location.accuracy || 0) + " m</strong></div>" +
@@ -1009,6 +1237,7 @@ function renderLocationDetail(container, location) {
         "<div><small>Captures</small><strong>" + location.capturedCount + "</strong></div>" +
         "</div>" +
         "<p class='rewardText'><strong>" + escapeHTML(location.rewardRarity) + " " + escapeHTML(location.rewardType.replaceAll("-", " ")) + "</strong><br>" + escapeHTML(location.rewardText || "Reward: +1 point") + "</p>" +
+        "<ul class='glyphObjectiveList'>" + glyphList + "</ul>" +
         "<details class='technicalDetails'" + (currentSettings.showTechnicalDetails ? " open" : "") + ">" +
         "<summary>Visit history</summary>" +
         "<p>" + visitorText + "</p>" +
@@ -1132,6 +1361,8 @@ function updateNavigationDisplay() {
         trailTargetHint.textContent = "Choose a saved place from Field Notes.";
         trailDistance.textContent = "--";
         trailAccuracy.textContent = "Accuracy unknown";
+        glyphProgressText.textContent = "Glyphs Found: 0 / 0";
+        foundGlyphButton.disabled = true;
 
         scanTargetName.textContent = "No target selected";
         scanTargetMeta.textContent = "Choose a place from Field Notes.";
@@ -1141,6 +1372,8 @@ function updateNavigationDisplay() {
     }
 
     updateTargetIcon(activeTarget);
+    foundGlyphButton.disabled = false;
+    glyphProgressText.textContent = getGlyphProgressText(activeTarget);
     trailTargetName.textContent = activeTarget.name;
     trailTargetHint.textContent = activeTarget.hint || "Follow the signal.";
 
@@ -1192,6 +1425,23 @@ function updateNavigationDisplay() {
         "<br>Target Bearing: " + Math.round(bearing) + " degrees" +
         "<br>Phone Heading: " + (appState.compass.headingDegrees === null ? "not enabled" : Math.round(appState.compass.headingDegrees) + " degrees") +
         "<br>Status: " + (arrived ? "Discovery reached" : "Move toward target");
+}
+
+function getGlyphProgressText(location) {
+    const objectives = location && Array.isArray(location.glyphObjectives) ? location.glyphObjectives : [];
+    const complete = objectives.filter(function(objective) {
+        return objective.status === "complete";
+    }).length;
+
+    return "Glyphs Found: " + complete + " / " + objectives.length;
+}
+
+function getGlyphPoints(location) {
+    const objectives = location && Array.isArray(location.glyphObjectives) ? location.glyphObjectives : [];
+
+    return objectives.reduce(function(total, objective) {
+        return total + Number(objective.points || 0);
+    }, Number(location && location.completionBonus || 0));
 }
 
 function updateTargetIcon(location) {
@@ -1322,6 +1572,6 @@ function escapeHTML(text) {
 }
 
 loadAccounts();
-landingGate.hidden = currentSettings.showLandingOnOpen === false;
+landingGate.hidden = false;
 renderAppState();
 renderLocations();

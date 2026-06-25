@@ -6,9 +6,9 @@ It combines three core tools:
 
 - A GPS bookmark library for saving real places
 - A compass trail view for following saved places
-- A camera scanner for locking onto physical red triangle sigils
+- A camera scanner for locking onto physical red, green, and pink hollow-triangle glyphs
 
-The project is intentionally local-first and static. It runs on GitHub Pages with no backend, no accounts, no paid APIs, and no build step.
+The project is intentionally local-first and static. It runs on GitHub Pages with no backend, no paid APIs, and no build step.
 
 ## Live Prototype
 
@@ -16,9 +16,9 @@ https://ijustcreate.github.io/location-based-quest-guide-app/
 
 ## Current Version
 
-Version 0.5.1 - Compact Header, Library Selector, and Scanner HUD
+Version 0.6.0 - Glyph Objectives and Quest Progression
 
-This pass keeps the Milestone 1 stabilization goals and tightens the mobile UI so the header and scanner no longer consume unnecessary vertical space.
+This pass adds glyph-based quest objectives, per-glyph matching, completion progress, admin tools, and a direct/QR landing flow.
 
 Current prototype systems include:
 
@@ -29,17 +29,23 @@ Current prototype systems include:
 - Centralized app state labels to avoid contradictory UI states
 - GPS permission flow and live coordinate tracking
 - Compass heading support where the browser/device allows it
-- Saved place creation with name, optional hint, and captured facing direction when compass data is available
+- Saved place creation with name, optional hint, captured facing direction, photo, and glyph objectives
 - Local saved place persistence with `localStorage`
 - Library location selector in the header with full selected-place details below
 - Library details that hide raw coordinates by default
 - Begin Trail, Edit, Delete, and Clear All actions
 - In-app modal dialogs instead of native browser alerts
-- Red triangle camera scanner prototype
+- Red, green, and pink hollow-triangle camera scanner prototype
 - Scanner states: searching, signal found, holding steady, sigil locked
 - Stable hold requirement before scanner lock
 - Scanner HUD metrics over the camera for Color, Shape, Light, Stability, and Lock
 - Basic PWA metadata and manifest for installable-app behavior
+- Landing prompt for every fresh direct/QR entry: `Have you found a glyph?`
+- Glyph objective model with color family, shape, required/optional status, points, evidence requirement, minimum confidence, and completion state
+- Location progress: `Glyphs Found: X / Y`
+- Correct glyph sightings record canvas photo evidence and award points
+- Wrong glyphs show mismatch and do not complete objectives
+- Felix admin account sees all locally stored locations and can export/import/reset quest data
 
 ## Product Vision
 
@@ -51,7 +57,7 @@ The intended loop is:
 2. Save the location.
 3. Add a name and optional clue.
 4. Follow the saved place with GPS and compass direction.
-5. Scan a physical marker to confirm the exact discovery.
+5. Scan the assigned physical glyphs to confirm the exact discovery.
 
 GPS gets the player close. The marker confirms the moment of discovery.
 
@@ -77,15 +83,16 @@ The app only says `Trail Active` when GPS is active and a target is selected. Ot
 
 ### Scan
 
-Scan is the camera-based sigil detector.
+Scan is the camera-based glyph detector.
 
-It looks for a red triangle marker using lightweight browser camera analysis:
+It looks for hollow triangle markers using lightweight browser camera analysis:
 
 - `getUserMedia` opens the camera
 - frames are drawn to a canvas
-- red regions are detected
+- red, green, and pink regions are detected
 - candidate marker boxes are scored
 - the app requires a stable hold before lock
+- the active location's glyph objectives are checked before completion
 
 Scanner HUD metrics:
 
@@ -112,6 +119,9 @@ It supports:
 
 - Place name
 - Optional hint
+- Location / symbol photo
+- Red, green, and pink hollow-triangle objective assignment
+- Required or optional glyphs
 - GPS accuracy display
 - Current facing display when compass data exists
 - Save This Place
@@ -127,9 +137,11 @@ Library is the saved place notebook.
 
 It supports:
 
+- My Places, Public Quests Near Me, Shared With Me, and Users views
 - Saved-location dropdown in the header
 - Full detail view for the selected saved place
 - Distance when GPS is active
+- Creator, glyph count, point value, and completion status
 - Hidden technical coordinates by default
 - Show technical details toggle
 - Begin Trail
@@ -146,9 +158,9 @@ This is a static vanilla HTML/CSS/JavaScript project.
 - `index.html` - App shell, tab markup, PWA metadata, modal container
 - `styles.css` - Mobile UI, compact header controls, safe-area layout, bottom nav, cards, scanner HUD
 - `app.js` - Main app state, UI rendering, GPS, compass, tabs, modals, library behavior
-- `camera.js` - Camera startup and red triangle scanner logic
+- `camera.js` - Camera startup and multi-color hollow-triangle scanner logic
 - `navigation.js` - Distance, bearing, direction labels, arrow rotation, arrival detection
-- `storage.js` - Local saved place persistence
+- `storage.js` - Local accounts, public quest pool, glyph objectives, and saved place persistence
 - `manifest.json` - PWA manifest
 - `icon.svg` - App icon for the manifest
 - `README.md` - Project notes

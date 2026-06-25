@@ -4,7 +4,7 @@
 //
 // This is the Sigil Scanner system.
 //
-// It opens the camera and looks for a red triangle.
+// It opens the camera and looks for red, green, or pink hollow triangles.
 // It returns scanner data back to app.js so the UI can show:
 // - color signal
 // - symbol match
@@ -66,7 +66,7 @@ function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
 
         onResult({
             title: "Searching for sigils...",
-            message: "Point your camera at a red marker.",
+            message: "Point your camera at a quest glyph.",
             status: "searching",
             colorSignal: 0,
             symbolMatch: 0,
@@ -81,7 +81,7 @@ function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
         }
 
         cameraDetectionTimer = setInterval(function() {
-            scanFrameForRedTriangle(
+            scanFrameForGlyphTriangle(
                 videoElement,
                 canvasElement,
                 onResult
@@ -103,7 +103,7 @@ function startCameraMarkerDetection(videoElement, canvasElement, onResult) {
     });
 }
 
-function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
+function scanFrameForGlyphTriangle(videoElement, canvasElement, onResult) {
     // Do not scan until video is ready.
 
     if (!videoElement.videoWidth || !videoElement.videoHeight) {
@@ -138,14 +138,14 @@ function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
 
     const lighting = estimateSceneLighting(frame.data);
 
-    const mask = buildRedMask(
+    const mask = buildGlyphMask(
         frame.data,
         scanWidth,
         scanHeight,
         lighting
     );
 
-    const candidates = findRedComponents(
+    const candidates = findGlyphComponents(
         mask,
         scanWidth,
         scanHeight
@@ -173,7 +173,7 @@ function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
 
         onResult(smoothScannerResult({
             title: "Searching for sigils...",
-            message: "Point your camera at a red marker.",
+            message: "Point your camera at a red, green, or pink hollow triangle.",
             status: "searching",
             colorSignal: 0,
             symbolMatch: 0,
@@ -194,19 +194,19 @@ function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
     );
 
     let lockConfidence = Math.round(
-        best.redSignal * 0.35 +
+        best.colorSignal * 0.35 +
         best.shapeMatch * 0.24 +
         lighting.quality * 0.16 +
         frameStability * 0.18 +
         best.hollowScore * 0.07
     );
 
-    if (best.redSignal >= 90 && best.shapeMatch >= 50 && lighting.quality >= 40) {
+    if (best.colorSignal >= 90 && best.shapeMatch >= 50 && lighting.quality >= 40) {
         lockConfidence = Math.min(100, lockConfidence + 12);
     }
 
     const lockReady =
-        best.redSignal >= 75 &&
+        best.colorSignal >= 75 &&
         best.shapeMatch >= 50 &&
         frameStability >= 50 &&
         lighting.quality >= 25 &&
@@ -236,9 +236,11 @@ function scanFrameForRedTriangle(videoElement, canvasElement, onResult) {
         title: confirmed ? "Sigil Locked" : (lockReady ? "Hold steady" : "Signal found"),
         message: confirmed ?
             "Marker confirmed." :
-            "Red found. Center the triangle and hold still.",
+            best.colorFamily + " triangle found. Center the glyph and hold still.",
         status: status,
-        colorSignal: best.redSignal,
+        colorSignal: best.colorSignal,
+        colorFamily: best.colorFamily,
+        shape: "hollow-triangle",
         symbolMatch: best.shapeMatch,
         lightQuality: lighting.quality,
         frameStability: frameStability,
@@ -323,9 +325,10 @@ function estimateSceneLighting(data) {
     };
 }
 
-function buildRedMask(data, width, height, lighting) {
+function buildGlyphMask(data, width, height, lighting) {
     // Create a black/white layer:
-    // 1 = red marker pixel
+    // 0 = not a target glyph pixel
+    // 1 = red, 2 = green, 3 = pink target glyph pixel
     // 0 = not red
 
     const mask = new Uint8Array(width * height);
@@ -341,14 +344,10 @@ function buildRedMask(data, width, height, lighting) {
                 lighting
             );
 
-            if (
-                isRedPixel(
-                    corrected.r,
-                    corrected.g,
-                    corrected.b
-                )
-            ) {
-                mask[y * width + x] = 1;
+            const colorCode = getGlyphColorCode(corrected.r, corrected.g, corrected.b);
+
+            if (colorCode > 0) {
+                mask[y * width + x] = colorCode;
             }
         }
     }
@@ -416,24 +415,36 @@ function rgbToHsv(r, g, b) {
     };
 }
 
-function isRedPixel(r, g, b) {
-    // Red can wrap around hue 0/360.
-
+function getGlyphColorCode(r, g, b) {
     const hsv = rgbToHsv(r, g, b);
 
-    const hueIsRed =
-        hsv.hue < 22 ||
-        hsv.hue > 338;
+    if (hsv.saturation <= 0.32 || hsv.value <= 0.16) {
+        return 0;
+    }
 
-    return (
-        hueIsRed &&
-        hsv.saturation > 0.38 &&
-        hsv.value > 0.16
-    );
+    if (hsv.hue < 22 || hsv.hue > 338) {
+        return 1;
+    }
+
+    if (hsv.hue >= 72 && hsv.hue <= 160) {
+        return 2;
+    }
+
+    if (hsv.hue >= 285 && hsv.hue <= 337) {
+        return 3;
+    }
+
+    return 0;
 }
 
-function findRedComponents(mask, width, height) {
-    // Find separate red blobs instead of one giant scene-wide box.
+function getGlyphColorFamily(code) {
+    if (code === 2) return "green";
+    if (code === 3) return "pink";
+    return "red";
+}
+
+function findGlyphComponents(mask, width, height) {
+    // Find separate glyph blobs instead of one giant scene-wide box.
 
     const visited = new Uint8Array(width * height);
     const components = [];
@@ -449,6 +460,7 @@ function findRedComponents(mask, width, height) {
             const component = floodFillComponent(
                 x,
                 y,
+                mask[startIndex],
                 mask,
                 visited,
                 width,
@@ -464,7 +476,7 @@ function findRedComponents(mask, width, height) {
     return components;
 }
 
-function floodFillComponent(startX, startY, mask, visited, width, height) {
+function floodFillComponent(startX, startY, colorCode, mask, visited, width, height) {
     // Basic connected-component search.
 
     const stack = [
@@ -494,7 +506,7 @@ function floodFillComponent(startX, startY, mask, visited, width, height) {
 
         const index = point.y * width + point.x;
 
-        if (visited[index] || mask[index] === 0) {
+        if (visited[index] || mask[index] !== colorCode) {
             continue;
         }
 
@@ -514,6 +526,8 @@ function floodFillComponent(startX, startY, mask, visited, width, height) {
 
     return {
         count: count,
+        colorCode: colorCode,
+        colorFamily: getGlyphColorFamily(colorCode),
         box: {
             x: minX,
             y: minY,
@@ -545,7 +559,7 @@ function scoreBestCandidate(components, mask, width, height) {
             return;
         }
 
-        const redSignal = Math.min(
+        const colorSignal = Math.min(
             100,
             Math.round(component.count / 160 * 100)
         );
@@ -587,10 +601,11 @@ function scoreBestCandidate(components, mask, width, height) {
 
         const candidate = {
             box: box,
-            redSignal: redSignal,
+            colorSignal: colorSignal,
+            colorFamily: component.colorFamily,
             shapeMatch: shapeMatch,
             hollowScore: hollowScore * 100,
-            total: redSignal * 0.35 + shapeMatch * 0.65
+            total: colorSignal * 0.35 + shapeMatch * 0.65
         };
 
         if (!best || candidate.total > best.total) {

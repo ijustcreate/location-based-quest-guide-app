@@ -156,6 +156,13 @@
 
                     <div class="sectionLabel">POPULAR QUESTS</div>
                     <div id="popularQuestStats" class="statsText"></div>
+
+                    <div id="adminTools" class="adminTools" hidden>
+                        <div class="sectionLabel">FELIX ADMIN</div>
+                        <button id="exportDataButton" class="secondaryButton" type="button">Export Quest Data</button>
+                        <button id="importDataButton" class="secondaryButton" type="button">Import Quest Data</button>
+                        <button id="resetDebugButton" class="dangerButton" type="button">Reset Quest Debug Data</button>
+                    </div>
                 </div>
             </div>
 
@@ -202,6 +209,16 @@
                         <small id="trailAccuracy">Accuracy unknown</small>
                     </div>
 
+                </div>
+
+                <div class="glyphProgressCard">
+                    <div>
+                        <div class="sectionLabel">GLYPH OBJECTIVES</div>
+                        <strong id="glyphProgressText">Glyphs Found: 0 / 0</strong>
+                    </div>
+                    <button id="foundGlyphButton" class="primaryButton" type="button">
+                        I Found The Symbol
+                    </button>
                 </div>
 
                 <div class="actionGrid">
@@ -400,6 +417,43 @@
                         <option value="Legendary">Legendary</option>
                     </select>
 
+                    <div class="glyphBuilder">
+                        <div class="sectionLabel">GLYPH OBJECTIVES</div>
+                        <p>Add the symbols players must scan at this location.</p>
+
+                        <div class="glyphObjectiveRow">
+                            <label for="glyphColor1">Glyph 1</label>
+                            <select id="glyphColor1" class="glyphColorSelect">
+                                <option value="red">Red Triangle</option>
+                                <option value="green">Green Triangle</option>
+                                <option value="pink">Pink Triangle</option>
+                            </select>
+                            <label><input id="glyphRequired1" type="checkbox" checked> Required</label>
+                        </div>
+
+                        <div class="glyphObjectiveRow">
+                            <label for="glyphColor2">Glyph 2</label>
+                            <select id="glyphColor2" class="glyphColorSelect">
+                                <option value="">None</option>
+                                <option value="red">Red Triangle</option>
+                                <option value="green">Green Triangle</option>
+                                <option value="pink">Pink Triangle</option>
+                            </select>
+                            <label><input id="glyphRequired2" type="checkbox" checked> Required</label>
+                        </div>
+
+                        <div class="glyphObjectiveRow">
+                            <label for="glyphColor3">Glyph 3</label>
+                            <select id="glyphColor3" class="glyphColorSelect">
+                                <option value="">None</option>
+                                <option value="red">Red Triangle</option>
+                                <option value="green">Green Triangle</option>
+                                <option value="pink">Pink Triangle</option>
+                            </select>
+                            <label><input id="glyphRequired3" type="checkbox" checked> Required</label>
+                        </div>
+                    </div>
+
                     <label for="chainNextLocationSelect">Next Location In Chain</label>
                     <select id="chainNextLocationSelect">
                         <option value="">No next location yet</option>
@@ -432,6 +486,13 @@
                     <button id="clearButton" class="dangerMiniButton" type="button">
                         Clear All
                     </button>
+                </div>
+
+                <div class="libraryTabs">
+                    <button class="libraryTab activeLibraryTab" data-library-view="mine" type="button">My Places</button>
+                    <button class="libraryTab" data-library-view="public" type="button">Public Quests Near Me</button>
+                    <button class="libraryTab" data-library-view="shared" type="button">Shared With Me</button>
+                    <button class="libraryTab" data-library-view="users" type="button">Users</button>
                 </div>
 
                 <div id="savedLocations" class="savedList"></div>

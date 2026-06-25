@@ -8,6 +8,10 @@ const ACCOUNTS_KEY = "questCompass.accounts.v1";
 const SESSION_KEY = "questCompass.session.v1";
 const SETTINGS_KEY = "questCompass.settings.v1";
 const QUEST_STATS_KEY = "questCompass.questStats.v1";
+const PUBLIC_LOCATIONS_KEY = STORAGE_KEY + ".public";
+
+const GLYPH_COLORS = ["red", "green", "pink"];
+const GLYPH_SHAPES = ["hollow-triangle"];
 
 const DEFAULT_SETTINGS = {
     highAccuracyGps: true,
@@ -28,6 +32,14 @@ const DEFAULT_SETTINGS = {
 
 function createLocationId() {
     return "loc-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+}
+
+function createGlyphObjectiveId() {
+    return "glyph-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+}
+
+function isAdminUser(username) {
+    return String(username || getCurrentUsername() || "").toLowerCase() === "felix";
 }
 
 function createAccount(username, password, resources) {
@@ -260,8 +272,58 @@ function getLocationStorageKey() {
     return STORAGE_KEY + "." + username.toLowerCase();
 }
 
+function getAllLocationStorageKeys() {
+    const keys = [PUBLIC_LOCATIONS_KEY];
+
+    for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+
+        if (key && key.indexOf(STORAGE_KEY + ".") === 0 && key !== STORAGE_KEY + ".guest") {
+            keys.push(key);
+        }
+    }
+
+    keys.push(STORAGE_KEY + ".guest", STORAGE_KEY, LEGACY_STORAGE_KEY);
+
+    return Array.from(new Set(keys));
+}
+
+function normalizeGlyphObjective(objective, index) {
+    const colorFamily = GLYPH_COLORS.includes(objective.colorFamily || objective.color) ?
+        (objective.colorFamily || objective.color) :
+        "red";
+    const shape = GLYPH_SHAPES.includes(objective.shape) ? objective.shape : "hollow-triangle";
+    const status = objective.status === "complete" ? "complete" : "pending";
+
+    return {
+        id: objective.id || createGlyphObjectiveId(),
+        label: objective.label || colorFamily + " triangle " + (index + 1),
+        shape: shape,
+        colorFamily: colorFamily,
+        required: objective.required !== false,
+        points: Number(objective.points ?? 1),
+        evidenceRequirement: objective.evidenceRequirement || "photo",
+        minConfidence: Number(objective.minConfidence ?? 72),
+        status: status,
+        completedAt: objective.completedAt || null,
+        completedBy: objective.completedBy || null,
+        sightings: Array.isArray(objective.sightings) ? objective.sightings : []
+    };
+}
+
 function normalizeLocation(location) {
     const facingDegrees = location.facingDegrees ?? location.headingDegrees ?? null;
+    const glyphObjectives = Array.isArray(location.glyphObjectives) && location.glyphObjectives.length > 0 ?
+        location.glyphObjectives.map(normalizeGlyphObjective) :
+        [
+            normalizeGlyphObjective({
+                colorFamily: location.sigil && location.sigil.colorFamily ? location.sigil.colorFamily : "red",
+                shape: "hollow-triangle",
+                required: true,
+                points: 1,
+                minConfidence: 72
+            }, 0)
+        ];
 
     return {
         id: location.id || createLocationId(),
@@ -275,8 +337,12 @@ function normalizeLocation(location) {
         rewardRarity: location.rewardRarity || "Common",
         questName: location.questName || "Field Quest",
         chainNextLocationId: location.chainNextLocationId || "",
+        visibility: location.visibility || "public",
         imageDataUrl: location.imageDataUrl || "",
         gpsSamples: Array.isArray(location.gpsSamples) ? location.gpsSamples : [],
+        glyphObjectives: glyphObjectives,
+        completionBonus: Number(location.completionBonus ?? 2),
+        completedAt: location.completedAt || null,
         latitude: Number(location.latitude ?? location.lat),
         longitude: Number(location.longitude ?? location.lng),
         accuracy: Number(location.accuracy ?? location.accuracyMeters ?? 0),
@@ -296,6 +362,10 @@ function normalizeLocation(location) {
 }
 
 function loadLocations() {
+    if (isAdminUser()) {
+        return loadAllLocations();
+    }
+
     const savedForCurrentUser = localStorage.getItem(getLocationStorageKey());
     const saved = savedForCurrentUser ||
         (getCurrentUsername() ? null : localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY));
@@ -317,6 +387,34 @@ function loadLocations() {
     }
 }
 
+function loadAllLocations() {
+    const locationsById = {};
+
+    getAllLocationStorageKeys().forEach(function(key) {
+        const saved = localStorage.getItem(key);
+
+        if (!saved) {
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(saved);
+
+            if (!Array.isArray(parsed)) {
+                return;
+            }
+
+            parsed.map(normalizeLocation).forEach(function(location) {
+                locationsById[location.id] = location;
+            });
+        } catch (error) {
+            return;
+        }
+    });
+
+    return Object.values(locationsById);
+}
+
 function saveLocations(locations) {
     localStorage.setItem(
         getLocationStorageKey(),
@@ -326,6 +424,13 @@ function saveLocations(locations) {
     localStorage.removeItem(LEGACY_STORAGE_KEY);
 }
 
+function savePublicLocations(locations) {
+    localStorage.setItem(
+        PUBLIC_LOCATIONS_KEY,
+        JSON.stringify(locations.map(normalizeLocation))
+    );
+}
+
 function addLocation(location) {
     const locations = loadLocations();
     const normalized = normalizeLocation(location);
@@ -333,12 +438,36 @@ function addLocation(location) {
     locations.push(normalized);
     saveLocations(locations);
 
+    if (normalized.visibility === "public") {
+        const publicLocations = loadPublicLocations().filter(function(location) {
+            return location.id !== normalized.id;
+        });
+
+        publicLocations.push(normalized);
+        savePublicLocations(publicLocations);
+    }
+
     const currentUser = getCurrentUser();
 
     if (currentUser && !currentUser.createdLocationIds.includes(normalized.id)) {
         currentUser.createdLocationIds.push(normalized.id);
         currentUser.updatedAt = new Date().toISOString();
         saveCurrentUser(currentUser);
+    }
+}
+
+function loadPublicLocations() {
+    const saved = localStorage.getItem(PUBLIC_LOCATIONS_KEY);
+
+    if (!saved) {
+        return [];
+    }
+
+    try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed.map(normalizeLocation) : [];
+    } catch (error) {
+        return [];
     }
 }
 
@@ -359,7 +488,173 @@ function updateLocationById(locationId, updater) {
     });
 
     saveLocations(locations);
+    if (updatedLocation && updatedLocation.visibility === "public") {
+        savePublicLocations(loadPublicLocations().map(function(location) {
+            return location.id === updatedLocation.id ? updatedLocation : location;
+        }));
+    }
     return updatedLocation;
+}
+
+function updateLocationEverywhere(locationId, updater) {
+    let updatedLocation = null;
+
+    getAllLocationStorageKeys().forEach(function(key) {
+        const saved = localStorage.getItem(key);
+
+        if (!saved) {
+            return;
+        }
+
+        try {
+            const parsed = JSON.parse(saved);
+
+            if (!Array.isArray(parsed)) {
+                return;
+            }
+
+            const updated = parsed.map(function(location) {
+                const normalized = normalizeLocation(location);
+
+                if (normalized.id !== locationId) {
+                    return normalized;
+                }
+
+                updatedLocation = normalizeLocation(
+                    typeof updater === "function" ? updater(normalized) : Object.assign({}, normalized, updater || {})
+                );
+                updatedLocation.updatedAt = new Date().toISOString();
+                return updatedLocation;
+            });
+
+            localStorage.setItem(key, JSON.stringify(updated));
+        } catch (error) {
+            return;
+        }
+    });
+
+    return updatedLocation;
+}
+
+function exportQuestData() {
+    const payload = {};
+
+    [ACCOUNTS_KEY, SESSION_KEY, SETTINGS_KEY, QUEST_STATS_KEY].concat(getAllLocationStorageKeys()).forEach(function(key) {
+        const value = localStorage.getItem(key);
+
+        if (value !== null) {
+            payload[key] = value;
+        }
+    });
+
+    return JSON.stringify(payload, null, 2);
+}
+
+function importQuestData(json) {
+    const payload = JSON.parse(json);
+
+    Object.keys(payload).forEach(function(key) {
+        if (
+            key === ACCOUNTS_KEY ||
+            key === SESSION_KEY ||
+            key === SETTINGS_KEY ||
+            key === QUEST_STATS_KEY ||
+            key.indexOf(STORAGE_KEY) === 0
+        ) {
+            localStorage.setItem(key, payload[key]);
+        }
+    });
+}
+
+function resetQuestDebugData() {
+    getAllLocationStorageKeys().forEach(function(key) {
+        localStorage.removeItem(key);
+    });
+
+    localStorage.removeItem(QUEST_STATS_KEY);
+}
+
+function completeGlyphObjective(locationId, objectiveId, sighting) {
+    let awardedPoints = 0;
+    let matchedObjective = null;
+    let awardedGlyph = false;
+    let awardedCompletion = false;
+    const updater = function(location) {
+        const updated = normalizeLocation(location);
+
+        updated.glyphObjectives = updated.glyphObjectives.map(function(objective) {
+            if (objective.id !== objectiveId) {
+                return objective;
+            }
+
+            matchedObjective = Object.assign({}, objective);
+            matchedObjective.sightings = matchedObjective.sightings.concat([sighting]);
+
+            if (matchedObjective.status !== "complete") {
+                matchedObjective.status = "complete";
+                matchedObjective.completedAt = sighting.capturedAt;
+                matchedObjective.completedBy = sighting.username;
+                if (!awardedGlyph) {
+                    awardedPoints += Number(matchedObjective.points || 0);
+                    awardedGlyph = true;
+                }
+            }
+
+            return matchedObjective;
+        });
+
+        const requiredObjectives = updated.glyphObjectives.filter(function(objective) {
+            return objective.required;
+        });
+        const allRequiredComplete = requiredObjectives.every(function(objective) {
+            return objective.status === "complete";
+        });
+
+        if (allRequiredComplete && !updated.completedAt) {
+            updated.completedAt = sighting.capturedAt;
+            updated.status = "unlocked";
+            if (!awardedCompletion) {
+                awardedPoints += Number(updated.completionBonus || 0);
+                awardedCompletion = true;
+            }
+        }
+
+        return updated;
+    };
+
+    const updatedLocation = isAdminUser() ? updateLocationEverywhere(locationId, updater) : updateLocationById(locationId, updater);
+
+    if (!updatedLocation) {
+        return null;
+    }
+
+    if (awardedPoints > 0) {
+        const user = getCurrentUser();
+
+        if (user) {
+            user.points += awardedPoints;
+            user.resources.resource1 += awardedPoints;
+            if (!user.unlockedLocationIds.includes(updatedLocation.id)) {
+                user.unlockedLocationIds.push(updatedLocation.id);
+            }
+            user.captureHistory.push({
+                locationId: updatedLocation.id,
+                locationName: updatedLocation.name,
+                objectiveId: objectiveId,
+                rewardType: "glyph",
+                rewardRarity: updatedLocation.completedAt ? "Rare" : "Common",
+                capturedAt: sighting.capturedAt
+            });
+            user.updatedAt = sighting.capturedAt;
+            saveCurrentUser(user);
+        }
+    }
+
+    return {
+        location: normalizeLocation(updatedLocation),
+        objective: matchedObjective,
+        awardedPoints: awardedPoints
+    };
 }
 
 function refineLocationPosition(locationId, latitude, longitude, accuracy) {
