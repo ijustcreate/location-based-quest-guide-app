@@ -46,6 +46,8 @@ let lastScannerCueStatus = "";
 let libraryView = "mine";
 let pendingGpsCallbacks = [];
 let lastGlyphCompletionKey = "";
+let pendingGlyphAttune = null;
+let pendingGlyphIconDataUrls = ["", "", ""];
 
 const modeSubtitle = document.getElementById("modeSubtitle");
 const headerLocationSelect = document.getElementById("headerLocationSelect");
@@ -113,6 +115,12 @@ const locationImageButton = document.querySelector(".mapPin");
 const glyphColor1 = document.getElementById("glyphColor1");
 const glyphColor2 = document.getElementById("glyphColor2");
 const glyphColor3 = document.getElementById("glyphColor3");
+const glyphShape1 = document.getElementById("glyphShape1");
+const glyphShape2 = document.getElementById("glyphShape2");
+const glyphShape3 = document.getElementById("glyphShape3");
+const glyphIcon1 = document.getElementById("glyphIcon1");
+const glyphIcon2 = document.getElementById("glyphIcon2");
+const glyphIcon3 = document.getElementById("glyphIcon3");
 const glyphRequired1 = document.getElementById("glyphRequired1");
 const glyphRequired2 = document.getElementById("glyphRequired2");
 const glyphRequired3 = document.getElementById("glyphRequired3");
@@ -297,6 +305,9 @@ attuneButton.addEventListener("pointerleave", cancelAttuneHold);
 attuneButton.addEventListener("pointercancel", cancelAttuneHold);
 confirmFoundButton.addEventListener("click", confirmFoundLocation);
 locationImageInput.addEventListener("change", handleLocationImageSelected);
+glyphIcon1.addEventListener("change", function(event) { handleGlyphIconSelected(event, 0); });
+glyphIcon2.addEventListener("change", function(event) { handleGlyphIconSelected(event, 1); });
+glyphIcon3.addEventListener("change", function(event) { handleGlyphIconSelected(event, 2); });
 locationImageButton.addEventListener("click", function() {
     if (pendingLocationImageDataUrl) {
         showImagePreview(pendingLocationImageDataUrl, "Location Photo");
@@ -469,6 +480,7 @@ function enableScanner() {
 
     appState.scanner.status = "searching";
     attuneCompleted = false;
+    pendingGlyphAttune = null;
     attuneSignalStartedAt = null;
     attunePrompt.hidden = true;
     attuneMeterFill.style.width = "0%";
@@ -491,6 +503,7 @@ function disableScanner() {
     appState.scanner.lockConfidence = 0;
     appState.scanner.lockedAt = null;
     appState.scanner.error = null;
+    pendingGlyphAttune = null;
     confirmFoundButton.hidden = true;
     attunePrompt.hidden = true;
 }
@@ -563,15 +576,12 @@ function handleGlyphScanResult(result) {
         return;
     }
 
-    const completionKey = targetLocation.id + ":" + matchedObjective.id + ":" + result.colorFamily;
-
-    if (completionKey === lastGlyphCompletionKey) {
-        return;
-    }
-
-    lastGlyphCompletionKey = completionKey;
-
-    const sighting = {
+    pendingGlyphAttune = {
+        location: targetLocation,
+        objective: matchedObjective,
+        match: match,
+        result: result,
+        sighting: {
         username: getCurrentUsername() || "guest",
         capturedAt: new Date().toISOString(),
         confidence: Number(result.lockConfidence || 0),
@@ -583,22 +593,11 @@ function handleGlyphScanResult(result) {
         longitude: appState.gps.longitude,
         accuracy: appState.gps.accuracyMeters,
         distanceMeters: Math.round(match.distanceMeters)
+        }
     };
-    const completion = completeGlyphObjective(targetLocation.id, matchedObjective.id, sighting);
 
-    if (!completion) {
-        return;
-    }
-
-    activeTarget = completion.location;
-    currentUser = getCurrentUser();
-    renderLocations();
-    renderSettingsPanel();
-    renderAppState();
-    markerTitle.textContent = "Glyph captured";
-    markerMessage.textContent = "Congrats, you found " + completion.location.name + ". " + matchedObjective.label + " completed. +" + completion.awardedPoints + " points.";
-    playSoundCue("questComplete");
-    showGlyphCompletionModal(completion);
+    markerTitle.textContent = "Glyph locked";
+    markerMessage.textContent = "You found " + targetLocation.name + ". Hold Attune to bind this " + matchedObjective.label + ".";
 }
 
 function findNearestGlyphMatch(result) {
@@ -896,6 +895,13 @@ function savePlace(shouldFollow) {
     glyphColor1.value = "red";
     glyphColor2.value = "";
     glyphColor3.value = "";
+    glyphShape1.value = "hollow-triangle";
+    glyphShape2.value = "hollow-triangle";
+    glyphShape3.value = "hollow-triangle";
+    glyphIcon1.value = "";
+    glyphIcon2.value = "";
+    glyphIcon3.value = "";
+    pendingGlyphIconDataUrls = ["", "", ""];
     glyphRequired1.checked = true;
     glyphRequired2.checked = true;
     glyphRequired3.checked = true;
@@ -919,16 +925,17 @@ function savePlace(shouldFollow) {
 
 function buildGlyphObjectivesFromForm() {
     return [
-        { colorSelect: glyphColor1, requiredInput: glyphRequired1 },
-        { colorSelect: glyphColor2, requiredInput: glyphRequired2 },
-        { colorSelect: glyphColor3, requiredInput: glyphRequired3 }
+        { colorSelect: glyphColor1, shapeSelect: glyphShape1, requiredInput: glyphRequired1, iconIndex: 0 },
+        { colorSelect: glyphColor2, shapeSelect: glyphShape2, requiredInput: glyphRequired2, iconIndex: 1 },
+        { colorSelect: glyphColor3, shapeSelect: glyphShape3, requiredInput: glyphRequired3, iconIndex: 2 }
     ].filter(function(row) {
         return row.colorSelect.value;
     }).map(function(row, index) {
         return {
-            label: row.colorSelect.value + " hollow triangle",
-            shape: "hollow-triangle",
+            label: row.colorSelect.value + " " + row.shapeSelect.value.replace("hollow-", ""),
+            shape: row.shapeSelect.value,
             colorFamily: row.colorSelect.value,
+            iconDataUrl: pendingGlyphIconDataUrls[row.iconIndex],
             required: row.requiredInput.checked,
             points: index === 0 ? 2 : 1,
             evidenceRequirement: "photo",
@@ -1107,6 +1114,22 @@ function handleLocationImageSelected(event) {
     reader.readAsDataURL(file);
 }
 
+function handleGlyphIconSelected(event, index) {
+    const file = event.target.files && event.target.files[0];
+
+    if (!file) {
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function(loadEvent) {
+        pendingGlyphIconDataUrls[index] = loadEvent.target.result;
+    };
+
+    reader.readAsDataURL(file);
+}
+
 function getExplorerRank(user) {
     if (!user) {
         return 1;
@@ -1233,7 +1256,7 @@ function updateAttuneAvailability() {
     const signalSeconds = Number(currentSettings.attuneSignalSeconds || 3);
     const confidenceReady = appState.scanner.lockConfidence >= threshold;
 
-    if (!confidenceReady || attuneCompleted) {
+    if (!confidenceReady || attuneCompleted || !pendingGlyphAttune) {
         attuneSignalStartedAt = null;
         attunePrompt.hidden = true;
         cancelAttuneHold();
@@ -1303,6 +1326,40 @@ function completeAttuneCapture() {
     cancelAttuneHold();
     attuneMeterFill.style.width = "100%";
     attunePrompt.hidden = true;
+
+    if (pendingGlyphAttune) {
+        const completionKey = pendingGlyphAttune.location.id + ":" + pendingGlyphAttune.objective.id + ":" + pendingGlyphAttune.result.colorFamily;
+
+        if (completionKey === lastGlyphCompletionKey) {
+            return;
+        }
+
+        lastGlyphCompletionKey = completionKey;
+
+        const completion = completeGlyphObjective(
+            pendingGlyphAttune.location.id,
+            pendingGlyphAttune.objective.id,
+            pendingGlyphAttune.sighting
+        );
+
+        pendingGlyphAttune = null;
+
+        if (!completion) {
+            return;
+        }
+
+        activeTarget = completion.location;
+        currentUser = getCurrentUser();
+        renderAccountBar();
+        renderLocations();
+        renderSettingsPanel();
+        renderAppState();
+        markerTitle.textContent = "Glyph attuned";
+        markerMessage.textContent = "Congrats, you found " + completion.location.name + ". +" + completion.awardedPoints + " points.";
+        playSoundCue("questComplete");
+        showGlyphCompletionModal(completion);
+        return;
+    }
 
     const captureLocation = activeTarget || {
         id: "unbound-sigil",
@@ -1385,26 +1442,17 @@ function confirmFoundLocation() {
         ) || activeTarget;
     }
 
-    const alreadyCaptured = currentUser && currentUser.captureHistory.some(function(capture) {
-        return capture.locationId === activeTarget.id;
-    });
-
-    if (!alreadyCaptured) {
-        recordLocationCapture(refinedTarget);
-    } else {
-        recordLocationVisit(refinedTarget, "confirmed-found");
-    }
+    recordLocationVisit(refinedTarget, "confirmed-found");
 
     activeTarget = refinedTarget;
     currentUser = getCurrentUser();
     renderLocations();
     renderSettingsPanel();
     renderAppState();
-    playSoundCue("questComplete");
 
     showModal({
         title: "Location Confirmed",
-        message: "The marker is locked. This location now has a fresher GPS sample, and your discovery has been saved.",
+        message: "The marker is locked and this location now has a fresher GPS sample. Hold Attune on each matching glyph to earn completion rewards.",
         actions: [
             { label: "Continue", className: "primaryButton", onClick: hideModal }
         ]
@@ -1426,6 +1474,7 @@ function renderLocationDetail(container, location) {
         }).join("<br>");
     const glyphList = location.glyphObjectives.map(function(objective) {
         return "<li class='" + (objective.status === "complete" ? "glyphComplete" : "") + "'>" +
+            renderGlyphIconMarkup(objective) +
             "<span>" + escapeHTML(objective.colorFamily) + " " + escapeHTML(objective.shape.replaceAll("-", " ")) + "</span>" +
             "<strong>" + escapeHTML(objective.status) + " · " + objective.points + " pts</strong>" +
             "</li>";
@@ -1439,6 +1488,7 @@ function renderLocationDetail(container, location) {
         "<div class='locationDetailHeader'>" +
         "<button class='locationImageThumb' type='button' aria-label='Open location photo'>" + (location.imageDataUrl ? "" : "✦") + "</button>" +
         "<div><div class='sectionLabel'>" + escapeHTML(location.questName) + "</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
+        "<button class='followButton headerFollowButton'>Begin Quest</button>" +
         "</div>" +
         "<p class='locationHint'>" + escapeHTML(location.hint || "No clue saved yet.") + "</p>" +
         "<div class='clueBlock'>" +
@@ -1472,7 +1522,6 @@ function renderLocationDetail(container, location) {
         "</p>" +
         "</details>" +
         "<div class='locationActions'>" +
-        "<button class='followButton'>Begin Trail</button>" +
         "<button class='editButton'>Edit</button>" +
         "<button class='deleteButton'>Delete</button>" +
         "</div>";
@@ -1528,6 +1577,14 @@ function renderLocationDetail(container, location) {
     });
 
     container.appendChild(card);
+}
+
+function renderGlyphIconMarkup(objective) {
+    if (objective.iconDataUrl) {
+        return "<span class='glyphIconPhoto' style='background-image:url(\"" + escapeHTML(objective.iconDataUrl) + "\")'></span>";
+    }
+
+    return "<span class='glyphIconBadge glyph-" + escapeHTML(objective.colorFamily) + " glyph-" + escapeHTML(objective.shape) + "'></span>";
 }
 
 function setActiveTarget(location) {

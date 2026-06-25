@@ -4,7 +4,7 @@
 //
 // This is the Sigil Scanner system.
 //
-// It opens the camera and looks for red, green, or pink hollow triangles.
+// It opens the camera and looks for red, green, pink, or blue hollow glyphs.
 // It returns scanner data back to app.js so the UI can show:
 // - color signal
 // - symbol match
@@ -201,7 +201,7 @@ function scanFrameForGlyphTriangle(videoElement, canvasElement, onResult) {
 
         onResult(smoothScannerResult({
             title: "Searching for sigils...",
-            message: "Point your camera at a red, green, or pink hollow triangle.",
+            message: "Point your camera at a colored hollow glyph.",
             status: "searching",
             colorSignal: 0,
             symbolMatch: 0,
@@ -268,7 +268,7 @@ function scanFrameForGlyphTriangle(videoElement, canvasElement, onResult) {
         status: status,
         colorSignal: best.colorSignal,
         colorFamily: best.colorFamily,
-        shape: "hollow-triangle",
+        shape: best.shape,
         symbolMatch: best.shapeMatch,
         lightQuality: lighting.quality,
         frameStability: frameStability,
@@ -356,7 +356,7 @@ function estimateSceneLighting(data) {
 function buildGlyphMask(data, width, height, lighting) {
     // Create a black/white layer:
     // 0 = not a target glyph pixel
-    // 1 = red, 2 = green, 3 = pink target glyph pixel
+    // 1 = red, 2 = green, 3 = pink, 4 = blue target glyph pixel
     // 0 = not red
 
     const mask = new Uint8Array(width * height);
@@ -465,12 +465,17 @@ function getGlyphColorCode(r, g, b) {
         return 3;
     }
 
+    if (hsv.hue >= 175 && hsv.hue <= 255) {
+        return 4;
+    }
+
     return 0;
 }
 
 function getGlyphColorFamily(code) {
     if (code === 2) return "green";
     if (code === 3) return "pink";
+    if (code === 4) return "blue";
     return "red";
 }
 
@@ -622,6 +627,12 @@ function scoreBestCandidate(components, mask, width, height) {
                 mask,
                 width
             );
+        const shape = classifyGlyphShape(
+            aspect,
+            density,
+            triangleProfile,
+            hollowScore
+        );
 
         const shapeMatch = Math.round(
             aspectScore * 22 +
@@ -634,6 +645,7 @@ function scoreBestCandidate(components, mask, width, height) {
             box: box,
             colorSignal: colorSignal,
             colorFamily: component.colorFamily,
+            shape: shape,
             shapeMatch: shapeMatch,
             hollowScore: hollowScore * 100,
             total: colorSignal * 0.35 + shapeMatch * 0.65
@@ -668,6 +680,18 @@ function scoreRange(value, min, max) {
     );
 }
 
+function classifyGlyphShape(aspect, density, triangleProfile, hollowScore) {
+    if (triangleProfile >= 0.52) {
+        return "hollow-triangle";
+    }
+
+    if (aspect > 0.82 && aspect < 1.18 && hollowScore > 0.35) {
+        return density < 0.22 ? "hollow-circle" : "hollow-square";
+    }
+
+    return "hollow-square";
+}
+
 function calculateHollowCenterScore(box, mask, width) {
     // A triangle outline should have a mostly non-red center.
 
@@ -684,7 +708,7 @@ function calculateHollowCenterScore(box, mask, width) {
         for (let x = startX; x <= endX; x += 1) {
             centerPixels += 1;
 
-            if (mask[y * width + x] === 1) {
+            if (mask[y * width + x] > 0) {
                 redCenterPixels += 1;
             }
         }
@@ -713,7 +737,7 @@ function calculateTriangleProfileScore(box, mask, width) {
 
     for (let y = box.y; y < box.y + box.height; y += 1) {
         for (let x = box.x; x < box.x + box.width; x += 1) {
-            if (mask[y * width + x] === 1) {
+            if (mask[y * width + x] > 0) {
                 const bucket = Math.min(
                     9,
                     Math.floor((y - box.y) / box.height * 10)

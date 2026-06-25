@@ -10,8 +10,8 @@ const SETTINGS_KEY = "questCompass.settings.v1";
 const QUEST_STATS_KEY = "questCompass.questStats.v1";
 const PUBLIC_LOCATIONS_KEY = STORAGE_KEY + ".public";
 
-const GLYPH_COLORS = ["red", "green", "pink"];
-const GLYPH_SHAPES = ["hollow-triangle"];
+const GLYPH_COLORS = ["red", "green", "pink", "blue"];
+const GLYPH_SHAPES = ["hollow-triangle", "hollow-circle", "hollow-square"];
 
 const DEFAULT_SETTINGS = {
     highAccuracyGps: true,
@@ -300,6 +300,7 @@ function normalizeGlyphObjective(objective, index) {
         label: objective.label || colorFamily + " triangle " + (index + 1),
         shape: shape,
         colorFamily: colorFamily,
+        iconDataUrl: objective.iconDataUrl || "",
         required: objective.required !== false,
         points: Number(objective.points ?? 1),
         evidenceRequirement: objective.evidenceRequirement || "photo",

@@ -854,7 +854,7 @@ textarea {
 
 .locationActions {
     display: grid;
-    grid-template-columns: 1fr 0.8fr auto;
+    grid-template-columns: 1fr auto;
     gap: 10px;
     margin-top: 14px;
 }
@@ -874,7 +874,7 @@ textarea {
 
 .glyphObjectiveRow {
     display: grid;
-    grid-template-columns: 72px 1fr auto;
+    grid-template-columns: 72px 1fr 1fr auto auto;
     gap: 8px;
     align-items: center;
     margin-top: 10px;
@@ -921,6 +921,7 @@ textarea {
 
 .glyphObjectiveList li {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 10px;
     padding: 10px 12px;
@@ -928,6 +929,53 @@ textarea {
     background: rgba(8, 13, 25, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #cbd5e1;
+}
+
+.glyphIconBadge,
+.glyphIconPhoto {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 12px;
+    background: rgba(119, 173, 255, 0.12);
+    border: 1px solid rgba(119, 173, 255, 0.28);
+    background-position: center;
+    background-size: cover;
+}
+
+.glyphIconBadge::before {
+    content: "△";
+    color: #ff7f7f;
+    font-size: 28px;
+    font-weight: 900;
+}
+
+.glyph-hollow-circle::before {
+    content: "○";
+}
+
+.glyph-hollow-square::before {
+    content: "□";
+}
+
+.glyph-green::before {
+    color: #7dffb1;
+}
+
+.glyph-pink::before {
+    color: #ff9df1;
+}
+
+.glyph-blue::before {
+    color: #9fd4ff;
+}
+
+.headerFollowButton {
+    width: auto;
+    min-width: 118px;
+    margin: 0;
 }
 
 .glyphObjectiveList .glyphComplete {
