@@ -157,15 +157,46 @@ This is a static vanilla HTML/CSS/JavaScript project.
 
 - `index.html` - App shell, tab markup, PWA metadata, modal container
 - `styles.css` - Mobile UI, compact header controls, safe-area layout, bottom nav, cards, scanner HUD
+- `cloud.js` - Supabase browser adapter for public/shared cloud quest reads
 - `app.js` - Main app state, UI rendering, GPS, compass, tabs, modals, library behavior
 - `camera.js` - Camera startup and multi-color hollow-triangle scanner logic
 - `navigation.js` - Distance, bearing, direction labels, arrow rotation, arrival detection
 - `storage.js` - Local accounts, public quest pool, glyph objectives, and saved place persistence
+- `supabase/` - Supabase CLI config and migrations for the shared quest backend
 - `manifest.json` - PWA manifest
 - `icon.svg` - App icon for the manifest
 - `README.md` - Project notes
 
-There is no package manager, build tool, server, or database required.
+There is no package manager or build tool required for the browser app. Supabase is used as the optional shared backend for public quests, invites, sightings, rewards, and future cross-device progress.
+
+## Supabase Backend
+
+The linked Supabase project is:
+
+```text
+https://livyedmscrkbnoxfpsoy.supabase.co
+```
+
+The first migration creates:
+
+- `profiles`
+- `locations`
+- `quests`
+- `quest_locations`
+- `glyph_objectives`
+- `glyph_sightings`
+- `user_glyph_progress`
+- `user_location_progress`
+- `user_quest_progress`
+- `rewards`
+- `user_rewards`
+- `location_access`
+- `quest_access`
+- `invites`
+
+It also enables Row Level Security and creates helper functions for admin checks, location/quest access, distance calculation, and nearby public locations.
+
+The static app currently reads public cloud locations into the `Public Quests Near Me` Library tab through `cloud.js`. Local storage remains the fallback/offline path while account auth, invite acceptance, admin cloud creation, and cloud write flows are built out.
 
 ## Local Storage
 

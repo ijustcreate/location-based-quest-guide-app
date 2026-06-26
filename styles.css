@@ -983,6 +983,14 @@ textarea {
     background: rgba(31, 91, 60, 0.25);
 }
 
+.cloudStatusCard,
+.cloudLocationCard {
+    border-color: rgba(94, 255, 184, 0.2);
+    background:
+        linear-gradient(135deg, rgba(94, 255, 184, 0.08), transparent),
+        rgba(13, 20, 38, 0.84);
+}
+
 .adminTools {
     display: grid;
     gap: 8px;

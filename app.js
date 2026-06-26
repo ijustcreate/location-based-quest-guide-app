@@ -964,6 +964,10 @@ function renderLocations() {
         container.innerHTML =
             "<div class='locationCard'><h3>No locations here yet.</h3><p>Use Create to save your first glyph quest.</p></div>";
 
+        if (libraryView === "public") {
+            refreshCloudPublicLocations(container);
+        }
+
         return;
     }
 
@@ -979,6 +983,75 @@ function renderLocations() {
     });
 
     renderLocationDetail(container, selectedLocation);
+
+    if (libraryView === "public") {
+        refreshCloudPublicLocations(container);
+    }
+}
+
+async function refreshCloudPublicLocations(container) {
+    if (!window.QuestCloud || !window.QuestCloud.isAvailable()) {
+        return;
+    }
+
+    const cloudStatus = document.createElement("div");
+
+    cloudStatus.className = "locationCard cloudStatusCard";
+    cloudStatus.innerHTML = "<div class='sectionLabel'>CLOUD</div><p>Checking public quests near you...</p>";
+    container.appendChild(cloudStatus);
+
+    try {
+        const locations = await window.QuestCloud.fetchPublicLocations(
+            appState.gps.latitude,
+            appState.gps.longitude,
+            5000
+        );
+
+        if (libraryView !== "public") {
+            return;
+        }
+
+        if (locations.length === 0) {
+            cloudStatus.innerHTML =
+                "<div class='sectionLabel'>CLOUD</div><p>No Supabase public quests found nearby yet.</p>";
+            return;
+        }
+
+        cloudStatus.innerHTML =
+            "<div class='sectionLabel'>CLOUD</div><h3>Public Quests Near Me</h3>";
+
+        locations.forEach(function(location) {
+            container.appendChild(renderCloudLocationCard(location));
+        });
+    } catch (error) {
+        cloudStatus.innerHTML =
+            "<div class='sectionLabel'>CLOUD</div><p>Could not load Supabase quests: " + escapeHTML(error.message || error) + "</p>";
+    }
+}
+
+function renderCloudLocationCard(location) {
+    const card = document.createElement("div");
+    const glyphCount = Array.isArray(location.glyphObjectives) ? location.glyphObjectives.length : 0;
+
+    card.className = "locationCard cloudLocationCard";
+    card.innerHTML =
+        "<div class='locationDetailHeader'>" +
+        "<div><div class='sectionLabel'>PUBLIC CLOUD QUEST</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
+        "<button class='followButton headerFollowButton'>Begin Quest</button>" +
+        "</div>" +
+        "<p class='locationHint'>" + escapeHTML(location.hint || "No clue shared yet.") + "</p>" +
+        "<div class='libraryMetaGrid'>" +
+        "<div><small>Distance</small><strong>" + escapeHTML(location.distanceMeters ? formatDistance(location.distanceMeters) : "GPS needed") + "</strong></div>" +
+        "<div><small>Glyphs</small><strong>" + glyphCount + "</strong></div>" +
+        "<div><small>Source</small><strong>Supabase</strong></div>" +
+        "</div>";
+
+    card.querySelector(".followButton").addEventListener("click", function() {
+        setActiveTarget(location);
+        setMode("trail");
+    });
+
+    return card;
 }
 
 function renderUsersView(container) {
