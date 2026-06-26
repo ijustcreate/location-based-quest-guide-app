@@ -16,9 +16,9 @@ https://ijustcreate.github.io/location-based-quest-guide-app/
 
 ## Current Version
 
-Version 0.6.0 - Glyph Objectives and Quest Progression
+Version 0.7.0 - V1 Playtest Stabilization
 
-This pass adds glyph-based quest objectives, per-glyph matching, completion progress, admin tools, and a direct/QR landing flow.
+This pass stabilizes the first shareable playtest: saved-place edits use the full Create form, media is compressed before local storage, export downloads a JSON file, and the scanner/settings/library overlays are tightened for mobile use.
 
 Current prototype systems include:
 
@@ -31,9 +31,12 @@ Current prototype systems include:
 - Compass heading support where the browser/device allows it
 - Saved place creation with name, optional hint, captured facing direction, photo, and glyph objectives
 - Local saved place persistence with `localStorage`
+- Local image compression and quota recovery for saved-place and glyph photos
 - Library location selector in the header with full selected-place details below
 - Library details that hide raw coordinates by default
 - Begin Trail, Edit, Delete, and Clear All actions
+- Full location editing through the Create form without replacing coordinates unless requested
+- Current GPS and pasted Google Maps coordinates can replace a location's saved coordinates
 - In-app modal dialogs instead of native browser alerts
 - Red, green, and pink hollow-triangle camera scanner prototype
 - Scanner states: searching, signal found, holding steady, sigil locked
@@ -46,6 +49,7 @@ Current prototype systems include:
 - Correct glyph sightings record canvas photo evidence and award points
 - Wrong glyphs show mismatch and do not complete objectives
 - Felix admin account sees all locally stored locations and can export/import/reset quest data
+- Export Quest Data downloads a JSON file instead of opening a blocking overlay
 
 ## Product Vision
 
@@ -123,6 +127,9 @@ It supports:
 - Red, green, and pink hollow-triangle objective assignment
 - Required or optional glyphs
 - GPS accuracy display
+- Existing location coordinate preservation while editing
+- Use Current GPS For This Location
+- Paste Google Maps Coordinates
 - Current facing display when compass data exists
 - Save This Place
 - Save + Follow
@@ -145,7 +152,7 @@ It supports:
 - Hidden technical coordinates by default
 - Show technical details toggle
 - Begin Trail
-- Edit placeholder modal
+- Edit in the full Create form
 - Delete confirmation
 - Clear All confirmation
 

@@ -425,6 +425,30 @@ function saveLocations(locations) {
     localStorage.removeItem(LEGACY_STORAGE_KEY);
 }
 
+function clearEmbeddedLocationMedia() {
+    const locations = loadLocations().map(function(location) {
+        const compact = normalizeLocation(location);
+
+        compact.imageDataUrl = compact.imageDataUrl && compact.imageDataUrl.indexOf("data:") === 0 ? "" : compact.imageDataUrl;
+        compact.glyphObjectives = compact.glyphObjectives.map(function(objective) {
+            const nextObjective = Object.assign({}, objective);
+
+            nextObjective.iconDataUrl = nextObjective.iconDataUrl && nextObjective.iconDataUrl.indexOf("data:") === 0 ? "" : nextObjective.iconDataUrl;
+            nextObjective.sightings = (nextObjective.sightings || []).map(function(sighting) {
+                return Object.assign({}, sighting, {
+                    imageDataUrl: ""
+                });
+            });
+
+            return nextObjective;
+        });
+
+        return compact;
+    });
+
+    saveLocations(locations);
+}
+
 function savePublicLocations(locations) {
     localStorage.setItem(
         PUBLIC_LOCATIONS_KEY,

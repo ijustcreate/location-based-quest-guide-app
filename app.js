@@ -48,6 +48,8 @@ let pendingGpsCallbacks = [];
 let lastGlyphCompletionKey = "";
 let pendingGlyphAttune = null;
 let pendingGlyphIconDataUrls = ["", "", ""];
+let editingLocationId = null;
+let draftLocationOverride = null;
 
 const modeSubtitle = document.getElementById("modeSubtitle");
 const headerLocationSelect = document.getElementById("headerLocationSelect");
@@ -87,6 +89,9 @@ const gpsReadout = document.getElementById("gpsReadout");
 const headingReadout = document.getElementById("headingReadout");
 const navigationReadout = document.getElementById("navigationReadout");
 const createGpsReadout = document.getElementById("createGpsReadout");
+const useCurrentLocationButton = document.getElementById("useCurrentLocationButton");
+const manualCoordinatesInput = document.getElementById("manualCoordinatesInput");
+const applyManualCoordinatesButton = document.getElementById("applyManualCoordinatesButton");
 
 const directionArrow = document.getElementById("directionArrow");
 const bearingReadout = document.getElementById("bearingReadout");
@@ -100,6 +105,7 @@ const foundGlyphButton = document.getElementById("foundGlyphButton");
 
 const scanTargetName = document.getElementById("scanTargetName");
 const scanTargetMeta = document.getElementById("scanTargetMeta");
+const compactTargetCard = document.querySelector(".compactTargetCard");
 
 const placeNameInput = document.getElementById("placeNameInput");
 const hintInput = document.getElementById("hintInput");
@@ -174,6 +180,12 @@ targetChip.addEventListener("click", function() {
     setMode("library");
 });
 
+compactTargetCard.addEventListener("click", function() {
+    if (!activeTarget) {
+        setMode("library");
+    }
+});
+
 document.getElementById("trailGpsButton").addEventListener("click", enableGPS);
 document.getElementById("trailCompassButton").addEventListener("click", enableCompass);
 
@@ -205,6 +217,9 @@ document.getElementById("createSaveFollowButton").addEventListener("click", func
     savePlace(true);
 });
 
+useCurrentLocationButton.addEventListener("click", useCurrentGpsForDraftLocation);
+applyManualCoordinatesButton.addEventListener("click", applyManualCoordinatesToDraft);
+
 document.getElementById("clearButton").addEventListener("click", clearAllSavedLocations);
 settingsClearButton.addEventListener("click", clearAllSavedLocations);
 
@@ -231,13 +246,7 @@ resetLandingButton.addEventListener("click", function() {
 });
 
 exportDataButton.addEventListener("click", function() {
-    showModal({
-        title: "Export Quest Data",
-        message: exportQuestData(),
-        actions: [
-            { label: "Close", className: "primaryButton", onClick: hideModal }
-        ]
-    });
+    downloadTextFile("quest-compass-export-" + Date.now() + ".json", exportQuestData());
 });
 
 importDataButton.addEventListener("click", function() {
@@ -825,10 +834,12 @@ function renderCompassReadout() {
 }
 
 function savePlace(shouldFollow) {
-    if (appState.gps.status !== "active" || appState.gps.latitude === null || appState.gps.longitude === null) {
+    const draftCoordinates = getDraftCoordinates();
+
+    if (!draftCoordinates) {
         showModal({
             title: "Location Needed",
-            message: "Enable GPS before saving this place.",
+            message: "Enable GPS, use current GPS, or paste Google Maps coordinates before saving.",
             actions: [
                 { label: "Enable GPS", className: "primaryButton", onClick: enableGPS },
                 { label: "Not now", className: "secondaryButton", onClick: hideModal }
@@ -862,29 +873,83 @@ function savePlace(shouldFollow) {
         chainNextLocationId: chainNextLocationSelect.value || "",
         glyphObjectives: buildGlyphObjectivesFromForm(),
         imageDataUrl: pendingLocationImageDataUrl,
-        latitude: appState.gps.latitude,
-        longitude: appState.gps.longitude,
-        accuracy: appState.gps.accuracyMeters,
+        latitude: draftCoordinates.latitude,
+        longitude: draftCoordinates.longitude,
+        accuracy: draftCoordinates.accuracy,
         facingDegrees: appState.compass.headingDegrees,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
     };
 
     try {
-        addLocation(newLocation);
+        if (editingLocationId) {
+            updateLocationById(editingLocationId, function(existing) {
+                return Object.assign({}, existing, newLocation, {
+                    id: existing.id,
+                    createdAt: existing.createdAt || newLocation.createdAt,
+                    updatedAt: new Date().toISOString()
+                });
+            });
+        } else {
+            addLocation(newLocation);
+        }
     } catch (error) {
-        showModal({
-            title: "Save Failed",
-            message: error.message || "This place could not be saved. Check browser storage permissions.",
-            actions: [
-                { label: "OK", className: "primaryButton", onClick: hideModal }
-            ]
-        });
+        try {
+            clearEmbeddedLocationMedia();
+            newLocation.imageDataUrl = "";
+            newLocation.glyphObjectives = newLocation.glyphObjectives.map(function(objective) {
+                return Object.assign({}, objective, { iconDataUrl: "" });
+            });
+
+            if (editingLocationId) {
+                updateLocationById(editingLocationId, function(existing) {
+                    return Object.assign({}, existing, newLocation, {
+                        id: existing.id,
+                        createdAt: existing.createdAt || newLocation.createdAt,
+                        updatedAt: new Date().toISOString()
+                    });
+                });
+            } else {
+                addLocation(newLocation);
+            }
+        } catch (retryError) {
+            showModal({
+                title: "Save Failed",
+                message: retryError.message || error.message || "This place could not be saved. Browser storage is full.",
+                actions: [
+                    { label: "OK", className: "primaryButton", onClick: hideModal }
+                ]
+            });
+            return;
+        }
+    }
+
+    if (!editingLocationId) {
+        syncLocationToCloud(newLocation);
+    }
+
+    const savedEditingLocationId = editingLocationId;
+    resetCreateForm();
+
+    renderLocations();
+
+    if (shouldFollow) {
+        const locations = loadLocations();
+        const target = savedEditingLocationId ?
+            locations.find(function(location) { return location.id === savedEditingLocationId; }) :
+            locations[locations.length - 1];
+
+        setActiveTarget(target);
+        setMode("trail");
         return;
     }
 
-    syncLocationToCloud(newLocation);
+    setMode("library");
+}
 
+function resetCreateForm() {
+    editingLocationId = null;
+    draftLocationOverride = null;
     placeNameInput.value = "";
     hintInput.value = "";
     clueInput.value = "";
@@ -894,6 +959,7 @@ function savePlace(shouldFollow) {
     rewardRaritySelect.value = "Common";
     questNameInput.value = "";
     chainNextLocationSelect.value = "";
+    manualCoordinatesInput.value = "";
     glyphColor1.value = "red";
     glyphColor2.value = "";
     glyphColor3.value = "";
@@ -912,17 +978,71 @@ function savePlace(shouldFollow) {
     locationImageButton.classList.remove("hasImage");
     locationImageButton.style.backgroundImage = "";
     locationImageButton.textContent = "📍";
+    createGpsReadout.textContent = appState.gps.status === "active" ? "Using current GPS when saving." : "Enable GPS to capture this place.";
+}
 
-    renderLocations();
+function getDraftCoordinates() {
+    if (draftLocationOverride) {
+        return draftLocationOverride;
+    }
 
-    if (shouldFollow) {
-        const locations = loadLocations();
-        setActiveTarget(locations[locations.length - 1]);
-        setMode("trail");
+    if (editingLocationId) {
+        const existing = loadLocations().find(function(location) {
+            return location.id === editingLocationId;
+        });
+
+        if (existing) {
+            return {
+                latitude: existing.latitude,
+                longitude: existing.longitude,
+                accuracy: existing.accuracy || 0
+            };
+        }
+    }
+
+    if (appState.gps.status === "active" && appState.gps.latitude !== null && appState.gps.longitude !== null) {
+        return {
+            latitude: appState.gps.latitude,
+            longitude: appState.gps.longitude,
+            accuracy: appState.gps.accuracyMeters || 0
+        };
+    }
+
+    return null;
+}
+
+function useCurrentGpsForDraftLocation() {
+    if (appState.gps.status !== "active") {
+        requestGpsThen(useCurrentGpsForDraftLocation);
         return;
     }
 
-    setMode("library");
+    draftLocationOverride = {
+        latitude: appState.gps.latitude,
+        longitude: appState.gps.longitude,
+        accuracy: appState.gps.accuracyMeters || 0
+    };
+    createGpsReadout.textContent = "Draft location set from current GPS.";
+}
+
+function applyManualCoordinatesToDraft() {
+    const match = manualCoordinatesInput.value.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+
+    if (!match) {
+        showModal({
+            title: "Coordinates Needed",
+            message: "Paste coordinates like 33.812345, -117.912345.",
+            actions: [{ label: "OK", className: "primaryButton", onClick: hideModal }]
+        });
+        return;
+    }
+
+    draftLocationOverride = {
+        latitude: Number(match[1]),
+        longitude: Number(match[2]),
+        accuracy: 0
+    };
+    createGpsReadout.textContent = "Draft location set from pasted coordinates.";
 }
 
 async function syncLocationToCloud(location) {
@@ -1206,39 +1326,70 @@ function handleAuthSubmit() {
     renderAppState();
 }
 
-function handleLocationImageSelected(event) {
+async function handleLocationImageSelected(event) {
     const file = event.target.files && event.target.files[0];
 
     if (!file) {
         return;
     }
 
-    const reader = new FileReader();
-
-    reader.onload = function(loadEvent) {
-        pendingLocationImageDataUrl = loadEvent.target.result;
+    try {
+        pendingLocationImageDataUrl = await resizeImageFile(file, 640, 0.72);
         locationImageButton.classList.add("hasImage");
         locationImageButton.style.backgroundImage = "url('" + pendingLocationImageDataUrl + "')";
         locationImageButton.textContent = "";
-    };
-
-    reader.readAsDataURL(file);
+    } catch (error) {
+        showModal({
+            title: "Image Failed",
+            message: "Could not prepare that image. Try a smaller photo.",
+            actions: [{ label: "OK", className: "primaryButton", onClick: hideModal }]
+        });
+    }
 }
 
-function handleGlyphIconSelected(event, index) {
+async function handleGlyphIconSelected(event, index) {
     const file = event.target.files && event.target.files[0];
 
     if (!file) {
         return;
     }
 
-    const reader = new FileReader();
+    try {
+        pendingGlyphIconDataUrls[index] = await resizeImageFile(file, 220, 0.68);
+    } catch (error) {
+        showModal({
+            title: "Image Failed",
+            message: "Could not prepare that glyph image. Try a smaller photo.",
+            actions: [{ label: "OK", className: "primaryButton", onClick: hideModal }]
+        });
+    }
+}
 
-    reader.onload = function(loadEvent) {
-        pendingGlyphIconDataUrls[index] = loadEvent.target.result;
-    };
+function resizeImageFile(file, maxSize, quality) {
+    return new Promise(function(resolve, reject) {
+        const reader = new FileReader();
 
-    reader.readAsDataURL(file);
+        reader.onerror = reject;
+        reader.onload = function(event) {
+            const image = new Image();
+
+            image.onerror = reject;
+            image.onload = function() {
+                const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+                const canvas = document.createElement("canvas");
+                const width = Math.max(1, Math.round(image.width * scale));
+                const height = Math.max(1, Math.round(image.height * scale));
+
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+                resolve(canvas.toDataURL("image/jpeg", quality));
+            };
+            image.src = event.target.result;
+        };
+
+        reader.readAsDataURL(file);
+    });
 }
 
 function getExplorerRank(user) {
@@ -1653,13 +1804,8 @@ function renderLocationDetail(container, location) {
     });
 
     card.querySelector(".editButton").addEventListener("click", function() {
-        showModal({
-            title: location.name,
-            message: location.hint || "No clue saved yet.",
-            actions: [
-                { label: "Close", className: "primaryButton", onClick: hideModal }
-            ]
-        });
+        loadLocationIntoCreateForm(location);
+        setMode("create");
     });
 
     card.querySelector(".deleteButton").addEventListener("click", function() {
@@ -1688,6 +1834,42 @@ function renderLocationDetail(container, location) {
     });
 
     container.appendChild(card);
+}
+
+function loadLocationIntoCreateForm(location) {
+    editingLocationId = location.id;
+    draftLocationOverride = null;
+    placeNameInput.value = location.name || "";
+    hintInput.value = location.hint || "";
+    clueInput.value = location.clue || "";
+    clueAnswerInput.value = location.clueAnswer || "";
+    rewardTextInput.value = location.rewardText || "";
+    rewardTypeSelect.value = location.rewardType || "story-fragment";
+    rewardRaritySelect.value = location.rewardRarity || "Common";
+    questNameInput.value = location.questName || "";
+    chainNextLocationSelect.value = location.chainNextLocationId || "";
+    const locationObjectives = Array.isArray(location.glyphObjectives) ? location.glyphObjectives : [];
+    const hasCoordinates = Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+
+    manualCoordinatesInput.value = hasCoordinates ? Number(location.latitude).toFixed(6) + ", " + Number(location.longitude).toFixed(6) : "";
+    pendingLocationImageDataUrl = location.imageDataUrl || "";
+    locationImageButton.classList.toggle("hasImage", !!pendingLocationImageDataUrl);
+    locationImageButton.style.backgroundImage = pendingLocationImageDataUrl ? "url('" + pendingLocationImageDataUrl + "')" : "";
+    locationImageButton.textContent = pendingLocationImageDataUrl ? "" : "📍";
+
+    [0, 1, 2].forEach(function(index) {
+        const objective = locationObjectives[index];
+        const colorSelect = [glyphColor1, glyphColor2, glyphColor3][index];
+        const shapeSelect = [glyphShape1, glyphShape2, glyphShape3][index];
+        const requiredInput = [glyphRequired1, glyphRequired2, glyphRequired3][index];
+
+        colorSelect.value = objective ? objective.colorFamily : (index === 0 ? "red" : "");
+        shapeSelect.value = objective ? objective.shape : "hollow-triangle";
+        requiredInput.checked = objective ? objective.required !== false : true;
+        pendingGlyphIconDataUrls[index] = objective ? objective.iconDataUrl || "" : "";
+    });
+
+    createGpsReadout.textContent = "Editing saved location. Coordinates stay unchanged unless you use current GPS or paste new coordinates.";
 }
 
 function renderGlyphIconMarkup(objective) {
@@ -1898,6 +2080,19 @@ function showImagePreview(imageDataUrl, title) {
     closeButton.addEventListener("click", hideModal);
     modalActions.appendChild(closeButton);
     modalOverlay.hidden = false;
+}
+
+function downloadTextFile(filename, text) {
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 }
 
 function playScannerCue(status) {
