@@ -157,6 +157,7 @@ const attunePrompt = document.getElementById("attunePrompt");
 const attuneButton = document.getElementById("attuneButton");
 const attuneMeterFill = document.getElementById("attuneMeterFill");
 const confirmFoundButton = document.getElementById("confirmFoundButton");
+const scanCameraButton = document.getElementById("scanCameraButton");
 const targetIconElement = document.querySelector(".targetIcon");
 
 document.querySelectorAll(".navButton").forEach(function(button) {
@@ -207,7 +208,7 @@ foundGlyphButton.addEventListener("click", function() {
     });
 });
 
-document.getElementById("scanCameraButton").addEventListener("click", enableScanner);
+scanCameraButton.addEventListener("click", enableScanner);
 
 document.getElementById("createSaveButton").addEventListener("click", function() {
     savePlace(false);
@@ -701,6 +702,7 @@ function findSuggestedNextLocation(location) {
 
 function updateConfirmFoundButton() {
     const canConfirm = activeTarget &&
+        !pendingGlyphAttune &&
         (appState.scanner.status === "sigilLocked" || appState.scanner.lockConfidence >= 70);
 
     confirmFoundButton.hidden = !canConfirm;
@@ -722,6 +724,7 @@ function renderAppState() {
     renderGpsReadouts();
     renderCompassReadout();
     updateNavigationDisplay();
+    scanCameraButton.hidden = appState.scanner.status !== "off" && appState.scanner.status !== "error";
 }
 
 function getHeaderSubtitle() {
@@ -1204,7 +1207,9 @@ function renderCloudLocationCard(location) {
         "<div><small>Source</small><strong>Supabase</strong></div>" +
         "</div>";
 
-    card.querySelector(".followButton").addEventListener("click", function() {
+    card.querySelector(".followButton").addEventListener("click", function(event) {
+        event.preventDefault();
+        event.stopPropagation();
         setActiveTarget(location);
         setMode("trail");
     });
@@ -1745,24 +1750,25 @@ function renderLocationDetail(container, location) {
         return objective.status === "complete";
     }).length;
 
-    card.className = "locationCard libraryDetail";
+    card.className = "locationCard libraryDetail compactQuestCard";
     card.innerHTML =
-        "<div class='locationDetailHeader'>" +
-        "<button class='locationImageThumb' type='button' aria-label='Open location photo'>" + (location.imageDataUrl ? "" : "✦") + "</button>" +
-        "<div><div class='sectionLabel'>" + escapeHTML(location.questName) + "</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
-        "<button class='followButton headerFollowButton'>Begin Quest</button>" +
-        "</div>" +
-        "<p class='locationHint'>" + escapeHTML(location.hint || "No clue saved yet.") + "</p>" +
+        "<details class='questDetails'>" +
+        "<summary class='questSummary'>" +
+        "<button class='locationImageThumb' type='button' aria-label='Open location photo'>" + (location.imageDataUrl ? "" : "Icon") + "</button>" +
+        "<span class='questSummaryText'><span class='sectionLabel'>" + escapeHTML(location.questName) + "</span><strong>" + escapeHTML(location.name) + "</strong><small>" + escapeHTML(location.hint || "No clue saved yet.") + "</small></span>" +
+        "<span class='questSummaryStats'><strong>" + completedGlyphs + " / " + location.glyphObjectives.length + "</strong><small>" + getGlyphPoints(location) + " pts</small></span>" +
+        "<button class='followButton headerFollowButton' type='button'>Begin Quest</button>" +
+        "<span class='questChevron'>v</span>" +
+        "</summary>" +
+        "<div class='questExpandedBody'>" +
         "<div class='clueBlock'>" +
         "<strong>Clue</strong>" +
         "<p>" + escapeHTML(location.clue || "No clue text yet.") + "</p>" +
         "<small>Answer: " + escapeHTML(location.clueAnswer || "Scanner capture") + "</small>" +
         "</div>" +
-        "<div class='libraryMetaGrid'>" +
-        "<div><small>Glyphs Found</small><strong>" + completedGlyphs + " / " + location.glyphObjectives.length + "</strong></div>" +
-        "<div><small>Points</small><strong>" + getGlyphPoints(location) + "</strong></div>" +
-        "<div><small>Creator</small><strong>" + escapeHTML(location.creatorUsername) + "</strong></div>" +
+        "<div class='libraryMetaGrid compactMetaGrid'>" +
         "<div><small>Status</small><strong>" + escapeHTML(distanceText) + "</strong></div>" +
+        "<div><small>Creator</small><strong>" + escapeHTML(location.creatorUsername) + "</strong></div>" +
         "<div><small>Saved</small><strong>" + escapeHTML(createdAt) + "</strong></div>" +
         "<div><small>Accuracy</small><strong>" + Math.round(location.accuracy || 0) + " m</strong></div>" +
         "<div><small>Facing</small><strong>" + escapeHTML(formatFacing(location.facingDegrees)) + "</strong></div>" +
@@ -1786,19 +1792,24 @@ function renderLocationDetail(container, location) {
         "<div class='locationActions'>" +
         "<button class='editButton'>Edit</button>" +
         "<button class='deleteButton'>Delete</button>" +
-        "</div>";
-
+        "</div>" +
+        "</div>" +
+        "</details>";
     const imageThumb = card.querySelector(".locationImageThumb");
 
     if (location.imageDataUrl) {
         imageThumb.classList.add("hasImage");
         imageThumb.style.backgroundImage = "url('" + location.imageDataUrl + "')";
-        imageThumb.addEventListener("click", function() {
+        imageThumb.addEventListener("click", function(event) {
+            event.preventDefault();
+            event.stopPropagation();
             showImagePreview(location.imageDataUrl, location.name);
         });
     }
 
-    card.querySelector(".followButton").addEventListener("click", function() {
+    card.querySelector(".followButton").addEventListener("click", function(event) {
+        event.preventDefault();
+        event.stopPropagation();
         setActiveTarget(location);
         setMode("trail");
     });
