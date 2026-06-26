@@ -16,9 +16,9 @@ https://ijustcreate.github.io/location-based-quest-guide-app/
 
 ## Current Version
 
-Version 0.7.0 - V1 Playtest Stabilization
+Version 0.8.0 - Bug Fixes and UX Corrections
 
-This pass stabilizes the first shareable playtest: saved-place edits use the full Create form, media is compressed before local storage, export downloads a JSON file, and the scanner/settings/library overlays are tightened for mobile use.
+This pass fixes early GPS prompts, reset consistency, scanner/settings layering, scanner action placement, cloud-sync messaging, and compass arrow readability for the first shareable playtest.
 
 Current prototype systems include:
 
@@ -28,6 +28,7 @@ Current prototype systems include:
 - Compact header control rail for GPS, compass, scanner, and target/library access
 - Centralized app state labels to avoid contradictory UI states
 - GPS permission flow and live coordinate tracking
+- No GPS prompt on initial app load; GPS is requested only after a clear location-based action
 - Compass heading support where the browser/device allows it
 - Saved place creation with name, optional hint, captured facing direction, photo, and glyph objectives
 - Local saved place persistence with `localStorage`
@@ -50,6 +51,9 @@ Current prototype systems include:
 - Wrong glyphs show mismatch and do not complete objectives
 - Felix admin account sees all locally stored locations and can export/import/reset quest data
 - Export Quest Data downloads a JSON file instead of opening a blocking overlay
+- Clear Local Device Data resets local places, active target, scanner progress, cached public quests, profile progress, and local quest stats
+- Cloud save failures are shown as friendly `Cloud sync pending` states with retry instead of raw JavaScript errors
+- Settings render above compass/scanner UI with scrollable, footer-safe content
 
 ## Product Vision
 
@@ -203,7 +207,7 @@ The first migration creates:
 
 It also enables Row Level Security and creates helper functions for admin checks, location/quest access, distance calculation, and nearby public locations.
 
-The static app currently reads public cloud locations into the `Public Quests Near Me` Library tab through `cloud.js`. Local storage remains the fallback/offline path while account auth, invite acceptance, admin cloud creation, and cloud write flows are built out.
+The static app currently reads public cloud locations into the Library tab through `cloud.js`. Public quests can be browsed without GPS; `Find Nearby Adventures` asks for GPS only when the player wants distance sorting. Local storage remains the fallback/offline path while account auth, invite acceptance, admin cloud creation, and fuller cloud write flows are built out.
 
 ## Local Storage
 

@@ -81,15 +81,7 @@ window.QuestCloud = (function() {
 
     async function submitPublicLocation(location) {
         const supabase = getClient();
-
-        if (!supabase) {
-            return {
-                ok: false,
-                message: "Supabase client unavailable."
-            };
-        }
-
-        const response = await supabase.rpc("submit_public_location", {
+        const payload = {
             location_name: location.name,
             location_hint: location.hint || "",
             location_clue: location.clue || "",
@@ -108,12 +100,46 @@ window.QuestCloud = (function() {
                     minConfidence: objective.minConfidence
                 };
             })
-        });
+        };
+
+        if (!supabase) {
+            return {
+                ok: false,
+                message: "Explorer Network client unavailable.",
+                debug: {
+                    hasUrl: Boolean(QUEST_CLOUD_CONFIG.url),
+                    hasPublishableKey: Boolean(QUEST_CLOUD_CONFIG.publishableKey)
+                }
+            };
+        }
+
+        let response;
+
+        try {
+            response = await supabase.rpc("submit_public_location", payload);
+        } catch (error) {
+            return {
+                ok: false,
+                message: error.message || String(error),
+                debug: {
+                    hasUrl: Boolean(QUEST_CLOUD_CONFIG.url),
+                    hasPublishableKey: Boolean(QUEST_CLOUD_CONFIG.publishableKey),
+                    payload: payload,
+                    networkFailure: error.message || String(error)
+                }
+            };
+        }
 
         if (response.error) {
             return {
                 ok: false,
-                message: response.error.message
+                message: response.error.message,
+                debug: {
+                    hasUrl: Boolean(QUEST_CLOUD_CONFIG.url),
+                    hasPublishableKey: Boolean(QUEST_CLOUD_CONFIG.publishableKey),
+                    payload: payload,
+                    responseError: response.error
+                }
             };
         }
 

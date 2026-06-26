@@ -148,7 +148,7 @@
                 <div class="settingsActions">
                     <button id="saveSettingsButton" class="primaryButton" type="button">Save Settings</button>
                     <button id="resetLandingButton" class="secondaryButton" type="button">Show Landing Again</button>
-                    <button id="settingsClearButton" class="dangerButton" type="button">Clear All Locations</button>
+                    <button id="settingsClearButton" class="dangerButton" type="button">Clear Local Device Data</button>
                 </div>
 
                 <div class="statsPanel">
@@ -280,27 +280,27 @@
 
                         <canvas id="cameraCanvas"></canvas>
 
+                        <div id="markerBanner" class="markerBanner">
+                            <div class="markerIcon">🔺</div>
+                            <div>
+                                <strong id="markerTitle">Scanner sleeping</strong>
+                                <p id="markerMessage">Enable camera to search for a glyph marker.</p>
+                            </div>
+                        </div>
+
                         <button id="confirmFoundButton" class="confirmFoundButton" type="button" hidden>
-                            Confirm Found
+                            Attune Sigil
                         </button>
 
                         <div id="attunePrompt" class="attunePrompt" hidden>
                             <button id="attuneButton" class="attuneButton" type="button">
-                                <span>Attune</span>
+                                <span>Attune Sigil</span>
                                 <small>Hold for 3 seconds</small>
                             </button>
 
                             <div class="attuneMeter">
                                 <div id="attuneMeterFill" class="attuneMeterFill"></div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div id="markerBanner" class="markerBanner">
-                        <div class="markerIcon">🔺</div>
-                        <div>
-                            <strong id="markerTitle">Scanner sleeping</strong>
-                            <p id="markerMessage">Enable camera to search for a red triangle marker.</p>
                         </div>
                     </div>
 

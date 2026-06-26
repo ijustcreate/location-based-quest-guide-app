@@ -230,12 +230,12 @@ headerLocationSelect.addEventListener("change", function() {
 });
 
 settingsButton.addEventListener("click", function() {
-    settingsPanel.hidden = !settingsPanel.hidden;
+    setSettingsOpen(settingsPanel.hidden);
     renderSettingsPanel();
 });
 
 closeSettingsButton.addEventListener("click", function() {
-    settingsPanel.hidden = true;
+    setSettingsOpen(false);
 });
 
 saveSettingsButton.addEventListener("click", saveSettingsFromPanel);
@@ -284,13 +284,7 @@ resetDebugButton.addEventListener("click", function() {
 
 foundSymbolButton.addEventListener("click", function() {
     enterApp(false);
-    requestGpsThen(function() {
-        setMode("scan");
-
-        if (currentSettings.autoStartScanner) {
-            enableScanner();
-        }
-    });
+    setMode("scan");
 });
 
 enterSiteButton.addEventListener("click", function() {
@@ -494,6 +488,7 @@ function enableScanner() {
     attuneSignalStartedAt = null;
     attunePrompt.hidden = true;
     attuneMeterFill.style.width = "0%";
+    attuneButton.querySelector("span").textContent = "Attune Sigil";
     renderAppState();
 
     startCameraMarkerDetection(
@@ -701,11 +696,18 @@ function findSuggestedNextLocation(location) {
 }
 
 function updateConfirmFoundButton() {
-    const canConfirm = activeTarget &&
-        !pendingGlyphAttune &&
-        (appState.scanner.status === "sigilLocked" || appState.scanner.lockConfidence >= 70);
+    const hasLock = appState.scanner.status === "sigilLocked" || appState.scanner.lockConfidence >= 70;
 
-    confirmFoundButton.hidden = !canConfirm;
+    if (pendingGlyphAttune || !activeTarget || !hasLock) {
+        confirmFoundButton.hidden = true;
+        confirmFoundButton.disabled = false;
+        confirmFoundButton.textContent = "Attune Sigil";
+        return;
+    }
+
+    confirmFoundButton.hidden = false;
+    confirmFoundButton.disabled = true;
+    confirmFoundButton.textContent = "Wrong Sigil";
 }
 
 function updateBar(barElement, textElement, value) {
@@ -884,9 +886,11 @@ function savePlace(shouldFollow) {
         updatedAt: new Date().toISOString()
     };
 
+    let savedLocation = null;
+
     try {
         if (editingLocationId) {
-            updateLocationById(editingLocationId, function(existing) {
+            savedLocation = updateLocationById(editingLocationId, function(existing) {
                 return Object.assign({}, existing, newLocation, {
                     id: existing.id,
                     createdAt: existing.createdAt || newLocation.createdAt,
@@ -894,7 +898,7 @@ function savePlace(shouldFollow) {
                 });
             });
         } else {
-            addLocation(newLocation);
+            savedLocation = addLocation(newLocation);
         }
     } catch (error) {
         try {
@@ -905,7 +909,7 @@ function savePlace(shouldFollow) {
             });
 
             if (editingLocationId) {
-                updateLocationById(editingLocationId, function(existing) {
+                savedLocation = updateLocationById(editingLocationId, function(existing) {
                     return Object.assign({}, existing, newLocation, {
                         id: existing.id,
                         createdAt: existing.createdAt || newLocation.createdAt,
@@ -913,7 +917,7 @@ function savePlace(shouldFollow) {
                     });
                 });
             } else {
-                addLocation(newLocation);
+                savedLocation = addLocation(newLocation);
             }
         } catch (retryError) {
             showModal({
@@ -927,8 +931,8 @@ function savePlace(shouldFollow) {
         }
     }
 
-    if (!editingLocationId) {
-        syncLocationToCloud(newLocation);
+    if (!editingLocationId && savedLocation) {
+        syncLocationToCloud(savedLocation);
     }
 
     const savedEditingLocationId = editingLocationId;
@@ -1057,30 +1061,56 @@ async function syncLocationToCloud(location) {
         const result = await window.QuestCloud.submitPublicLocation(location);
 
         if (result.ok) {
+            markLocationCloudSync(location.id, "synced", { cloudId: result.cloudId });
+            renderLocations();
             showModal({
                 title: "Saved",
-                message: "This place was saved locally and published to the shared Quest Compass cloud.",
+                message: "This place was saved locally and shared through the Explorer Network.",
                 actions: [
                     { label: "OK", className: "primaryButton", onClick: hideModal }
                 ]
             });
         } else {
+            markLocationCloudSync(location.id, "pending", result);
+            renderLocations();
             showModal({
-                title: "Saved Locally",
-                message: "This place is saved on this device. Cloud sync did not finish: " + result.message,
+                title: "Cloud Sync Pending",
+                message: getCloudPendingMessage(result.message),
                 actions: [
+                    { label: "Retry", className: "primaryButton", onClick: function() { hideModal(); retryCloudSync(location.id); } },
                     { label: "OK", className: "primaryButton", onClick: hideModal }
                 ]
             });
         }
     } catch (error) {
+        markLocationCloudSync(location.id, "pending", { message: error.message || String(error) });
+        renderLocations();
         showModal({
-            title: "Saved Locally",
-            message: "This place is saved on this device. Cloud sync did not finish: " + (error.message || error),
+            title: "Cloud Sync Pending",
+            message: getCloudPendingMessage(error.message || String(error)),
             actions: [
+                { label: "Retry", className: "primaryButton", onClick: function() { hideModal(); retryCloudSync(location.id); } },
                 { label: "OK", className: "primaryButton", onClick: hideModal }
             ]
         });
+    }
+}
+
+function getCloudPendingMessage(rawMessage) {
+    if (currentSettings.showTechnicalDetails && rawMessage) {
+        return "Saved on this device. Cloud sync is pending. Debug: " + rawMessage;
+    }
+
+    return "Saved on this device. Cloud sync is pending.";
+}
+
+function retryCloudSync(locationId) {
+    const location = loadLocations().find(function(savedLocation) {
+        return savedLocation.id === locationId;
+    });
+
+    if (location) {
+        syncLocationToCloud(location);
     }
 }
 
@@ -1123,7 +1153,9 @@ function renderLocations() {
 
     if (locations.length === 0) {
         container.innerHTML =
-            "<div class='locationCard'><h3>No locations here yet.</h3><p>Use Create to save your first glyph quest.</p></div>";
+            libraryView === "public" ?
+                "<div class='locationCard'><h3>Loading public quests...</h3><p>Explorer Network quests can be browsed without GPS. Use Find Nearby Adventures when you want distance sorting.</p></div>" :
+                "<div class='locationCard'><h3>No locations here yet.</h3><p>Use Create to save your first glyph quest.</p></div>";
 
         if (libraryView === "public") {
             refreshCloudPublicLocations(container);
@@ -1155,16 +1187,32 @@ async function refreshCloudPublicLocations(container) {
         return;
     }
 
+    const hasGps = appState.gps.status === "active" &&
+        appState.gps.latitude !== null &&
+        appState.gps.longitude !== null;
     const cloudStatus = document.createElement("div");
 
     cloudStatus.className = "locationCard cloudStatusCard";
-    cloudStatus.innerHTML = "<div class='sectionLabel'>CLOUD</div><p>Checking public quests near you...</p>";
+    cloudStatus.innerHTML =
+        "<div class='sectionLabel'>EXPLORER NETWORK</div>" +
+        "<p>" + (hasGps ? "Checking public quests near you..." : "Browse public quests without GPS, or use your location to sort nearby adventures.") + "</p>" +
+        (hasGps ? "" : "<button class='primaryButton findNearbyButton' type='button'>Find Nearby Adventures</button>");
     container.appendChild(cloudStatus);
+
+    const findNearbyButton = cloudStatus.querySelector(".findNearbyButton");
+
+    if (findNearbyButton) {
+        findNearbyButton.addEventListener("click", function() {
+            requestGpsThen(function() {
+                renderLocations();
+            });
+        });
+    }
 
     try {
         const locations = await window.QuestCloud.fetchPublicLocations(
-            appState.gps.latitude,
-            appState.gps.longitude,
+            hasGps ? appState.gps.latitude : null,
+            hasGps ? appState.gps.longitude : null,
             5000
         );
 
@@ -1174,19 +1222,21 @@ async function refreshCloudPublicLocations(container) {
 
         if (locations.length === 0) {
             cloudStatus.innerHTML =
-                "<div class='sectionLabel'>CLOUD</div><p>No Supabase public quests found nearby yet.</p>";
+                "<div class='sectionLabel'>EXPLORER NETWORK</div><p>No public quests found yet.</p>";
             return;
         }
 
         cloudStatus.innerHTML =
-            "<div class='sectionLabel'>CLOUD</div><h3>Public Quests Near Me</h3>";
+            "<div class='sectionLabel'>EXPLORER NETWORK</div><h3>" + (hasGps ? "Public Quests Near Me" : "Public Quests") + "</h3>";
 
         locations.forEach(function(location) {
             container.appendChild(renderCloudLocationCard(location));
         });
     } catch (error) {
         cloudStatus.innerHTML =
-            "<div class='sectionLabel'>CLOUD</div><p>Could not load Supabase quests: " + escapeHTML(error.message || error) + "</p>";
+            "<div class='sectionLabel'>EXPLORER NETWORK</div><p>Could not load public quests right now." +
+            (currentSettings.showTechnicalDetails ? " Debug: " + escapeHTML(error.message || error) : "") +
+            "</p>";
     }
 }
 
@@ -1197,14 +1247,14 @@ function renderCloudLocationCard(location) {
     card.className = "locationCard cloudLocationCard";
     card.innerHTML =
         "<div class='locationDetailHeader'>" +
-        "<div><div class='sectionLabel'>PUBLIC CLOUD QUEST</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
+        "<div><div class='sectionLabel'>PUBLIC QUEST</div><h3>" + escapeHTML(location.name) + "</h3></div>" +
         "<button class='followButton headerFollowButton'>Begin Quest</button>" +
         "</div>" +
         "<p class='locationHint'>" + escapeHTML(location.hint || "No clue shared yet.") + "</p>" +
         "<div class='libraryMetaGrid'>" +
         "<div><small>Distance</small><strong>" + escapeHTML(location.distanceMeters ? formatDistance(location.distanceMeters) : "GPS needed") + "</strong></div>" +
         "<div><small>Glyphs</small><strong>" + glyphCount + "</strong></div>" +
-        "<div><small>Source</small><strong>Supabase</strong></div>" +
+        "<div><small>Source</small><strong>Explorer Network</strong></div>" +
         "</div>";
 
     card.querySelector(".followButton").addEventListener("click", function(event) {
@@ -1237,9 +1287,7 @@ function getLocationsForLibraryView() {
     const username = getCurrentUsername();
 
     if (libraryView === "public") {
-        return loadPublicLocations().filter(function(location) {
-            return location.visibility === "public";
-        });
+        return [];
     }
 
     if (libraryView === "shared") {
@@ -1307,12 +1355,6 @@ function enterApp(shouldPromptGps) {
     currentSettings.showLandingOnOpen = false;
     saveSettings(currentSettings);
     renderAppState();
-
-    if (shouldPromptGps !== false && appState.gps.status !== "active" && appState.gps.status !== "requesting") {
-        window.setTimeout(function() {
-            requestGpsThen(function() {});
-        }, 250);
-    }
 }
 
 function handleAuthSubmit() {
@@ -1623,6 +1665,7 @@ function completeAttuneCapture() {
         renderAppState();
         markerTitle.textContent = "Glyph attuned";
         markerMessage.textContent = "Congrats, you found " + completion.location.name + ". +" + completion.awardedPoints + " points.";
+        attuneButton.querySelector("span").textContent = "Sigil Bound";
         playSoundCue("questComplete");
         showGlyphCompletionModal(completion);
         return;
@@ -1749,6 +1792,9 @@ function renderLocationDetail(container, location) {
     const completedGlyphs = location.glyphObjectives.filter(function(objective) {
         return objective.status === "complete";
     }).length;
+    const syncBadge = location.cloudSyncStatus === "pending" ?
+        "<button class='syncPendingButton' type='button'>Cloud sync pending</button>" :
+        "";
 
     card.className = "locationCard libraryDetail compactQuestCard";
     card.innerHTML =
@@ -1757,6 +1803,7 @@ function renderLocationDetail(container, location) {
         "<button class='locationImageThumb' type='button' aria-label='Open location photo'>" + (location.imageDataUrl ? "" : "Icon") + "</button>" +
         "<span class='questSummaryText'><span class='sectionLabel'>" + escapeHTML(location.questName) + "</span><strong>" + escapeHTML(location.name) + "</strong><small>" + escapeHTML(location.hint || "No clue saved yet.") + "</small></span>" +
         "<span class='questSummaryStats'><strong>" + completedGlyphs + " / " + location.glyphObjectives.length + "</strong><small>" + getGlyphPoints(location) + " pts</small></span>" +
+        syncBadge +
         "<button class='followButton headerFollowButton' type='button'>Begin Quest</button>" +
         "<span class='questChevron'>v</span>" +
         "</summary>" +
@@ -1814,6 +1861,16 @@ function renderLocationDetail(container, location) {
         setMode("trail");
     });
 
+    const syncButton = card.querySelector(".syncPendingButton");
+
+    if (syncButton) {
+        syncButton.addEventListener("click", function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            retryCloudSync(location.id);
+        });
+    }
+
     card.querySelector(".editButton").addEventListener("click", function() {
         loadLocationIntoCreateForm(location);
         setMode("create");
@@ -1845,6 +1902,11 @@ function renderLocationDetail(container, location) {
     });
 
     container.appendChild(card);
+}
+
+function setSettingsOpen(isOpen) {
+    settingsPanel.hidden = !isOpen;
+    document.body.classList.toggle("settingsOpen", isOpen);
 }
 
 function loadLocationIntoCreateForm(location) {
@@ -2041,17 +2103,36 @@ function updateTargetIcon(location) {
 
 function clearAllSavedLocations() {
     showModal({
-        title: "Clear Field Notes",
-        message: "Delete every saved place from this browser?",
+        title: "Clear Local Device Data",
+        message: "Clear saved places, active target, scanner progress, cached public quests, local map/profile progress, and local quest stats from this device? Published Explorer Network quests may still appear when reloaded from the cloud.",
         actions: [
             {
-                label: "Clear All",
+                label: "Clear Local Data",
                 className: "dangerButton",
                 onClick: function() {
-                    clearLocations();
+                    clearAllQuestData();
                     setActiveTarget(null);
+                    selectedLibraryLocationId = null;
+                    pendingGlyphAttune = null;
+                    attuneCompleted = false;
+                    lastGlyphCompletionKey = "";
+                    confirmFoundButton.hidden = true;
+                    attunePrompt.hidden = true;
+                    attuneMeterFill.style.width = "0%";
+                    currentUser = getCurrentUser();
+                    appState.scannerOverlay = false;
                     hideModal();
+                    renderAccountBar();
                     renderLocations();
+                    renderSettingsPanel();
+                    renderAppState();
+                    showModal({
+                        title: "Local Data Cleared",
+                        message: "My Places, active target, scanner progress, cached public quests, local map/profile progress, and local quest stats were cleared. Published Explorer Network quests were not deleted from the shared cloud.",
+                        actions: [
+                            { label: "OK", className: "primaryButton", onClick: hideModal }
+                        ]
+                    });
                 }
             },
             { label: "Cancel", className: "secondaryButton", onClick: hideModal }

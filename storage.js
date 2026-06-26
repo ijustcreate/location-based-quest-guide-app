@@ -357,6 +357,10 @@ function normalizeLocation(location) {
             null :
             Number(facingDegrees),
         sigil: location.sigil || null,
+        cloudId: location.cloudId || "",
+        cloudSyncStatus: location.cloudSyncStatus || "",
+        cloudSyncMessage: location.cloudSyncMessage || "",
+        cloudSyncedAt: location.cloudSyncedAt || null,
         createdAt: location.createdAt || new Date().toISOString(),
         updatedAt: location.updatedAt || location.createdAt || new Date().toISOString()
     };
@@ -479,6 +483,8 @@ function addLocation(location) {
         currentUser.updatedAt = new Date().toISOString();
         saveCurrentUser(currentUser);
     }
+
+    return normalized;
 }
 
 function loadPublicLocations() {
@@ -523,6 +529,17 @@ function updateLocationById(locationId, updater) {
         }));
     }
     return updatedLocation;
+}
+
+function markLocationCloudSync(locationId, status, details) {
+    return updateLocationById(locationId, function(location) {
+        return Object.assign({}, location, {
+            cloudSyncStatus: status,
+            cloudSyncMessage: details && details.message ? details.message : "",
+            cloudId: details && details.cloudId ? details.cloudId : location.cloudId || "",
+            cloudSyncedAt: status === "synced" ? new Date().toISOString() : location.cloudSyncedAt || null
+        });
+    });
 }
 
 function updateLocationEverywhere(locationId, updater) {
@@ -759,6 +776,44 @@ function deleteLocationById(locationId) {
 
 function clearLocations() {
     localStorage.removeItem(getLocationStorageKey());
+}
+
+function clearAllQuestData() {
+    const currentUsername = getCurrentUsername();
+
+    getAllLocationStorageKeys().forEach(function(key) {
+        localStorage.removeItem(key);
+    });
+
+    localStorage.removeItem(getLocationStorageKey());
+    localStorage.removeItem(PUBLIC_LOCATIONS_KEY);
+    localStorage.removeItem(QUEST_STATS_KEY);
+
+    if (currentUsername) {
+        const accounts = loadAccounts().map(function(account) {
+            if (account.username !== currentUsername) {
+                return account;
+            }
+
+            const nextAccount = normalizeAccount(account);
+
+            nextAccount.createdLocationIds = [];
+            nextAccount.unlockedLocationIds = [];
+            nextAccount.visitHistory = [];
+            nextAccount.captureHistory = [];
+            nextAccount.collection = [];
+            nextAccount.artifacts = [];
+            nextAccount.points = 0;
+            nextAccount.secretsSolved = 0;
+            nextAccount.updatedAt = new Date().toISOString();
+
+            return nextAccount;
+        });
+
+        saveAccounts(accounts);
+    }
+
+    localStorage.setItem(STORAGE_KEY + ".lastClearedAt", new Date().toISOString());
 }
 
 function loadQuestStats() {

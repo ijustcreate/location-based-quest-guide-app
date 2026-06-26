@@ -7,6 +7,13 @@
     --bottom-nav-height: 112px;
     --page-bottom-buffer: 40px;
     --safe-bottom: env(safe-area-inset-bottom);
+    --z-base: 1;
+    --z-header: 170;
+    --z-scanner-overlay: 180;
+    --z-bottom-nav: 300;
+    --z-settings: 900;
+    --z-modal: 1000;
+    --z-toast: 1100;
 }
 
 @media (max-width: 720px) {
@@ -68,7 +75,7 @@ main {
 .appHeader {
     position: relative;
     top: auto;
-    z-index: 170;
+    z-index: var(--z-header);
     padding-top: 4px;
     padding-bottom: 6px;
     background: transparent;
@@ -222,7 +229,7 @@ h1 {
 .trailScannerOverlay #scanPanel {
     position: fixed;
     inset: calc(72px + env(safe-area-inset-top)) 10px calc(var(--bottom-nav-height) + 18px + var(--safe-bottom)) 10px;
-    z-index: 180;
+    z-index: var(--z-scanner-overlay);
     display: block;
     overflow: auto;
     padding: 14px;
@@ -556,7 +563,7 @@ h1 {
 .confirmFoundButton {
     position: absolute;
     left: 50%;
-    bottom: 86px;
+    bottom: 20px;
     transform: translateX(-50%);
     z-index: 8;
     width: auto;
@@ -568,6 +575,13 @@ h1 {
     color: white;
     font-weight: 900;
     box-shadow: 0 0 24px rgba(91, 141, 255, 0.65);
+}
+
+.confirmFoundButton:disabled {
+    opacity: 0.72;
+    background: rgba(30, 39, 58, 0.92);
+    color: #aeb7c8;
+    box-shadow: none;
 }
 
 .confirmFoundButton[hidden] {
@@ -861,11 +875,23 @@ textarea {
 
 .questSummary {
     display: grid;
-    grid-template-columns: 54px minmax(0, 1fr) auto auto 22px;
+    grid-template-columns: 54px minmax(0, 1fr) auto auto auto 22px;
     gap: 10px;
     align-items: center;
     padding: 12px;
     cursor: pointer;
+}
+
+.syncPendingButton {
+    width: auto;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 211, 106, 0.45);
+    background: rgba(255, 211, 106, 0.12);
+    color: #ffd36a;
+    font-size: 12px;
+    font-weight: 800;
 }
 
 .questSummary .locationImageThumb {
@@ -1182,7 +1208,7 @@ textarea {
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 90;
+    z-index: var(--z-bottom-nav);
     width: 100%;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1219,7 +1245,7 @@ textarea {
 .modalOverlay {
     position: fixed;
     inset: 0;
-    z-index: 260;
+    z-index: var(--z-modal);
     display: grid;
     place-items: center;
     padding: 18px;
@@ -1473,8 +1499,9 @@ h1 {
     position: absolute;
     left: 24px;
     right: 24px;
-    bottom: 104px;
-    z-index: 6;
+    top: 46px;
+    bottom: auto;
+    z-index: 7;
     margin: 0;
     padding: 10px 12px;
     border-radius: 14px;
@@ -1594,7 +1621,8 @@ h1 {
     .markerBanner {
         left: 20px;
         right: 20px;
-        bottom: 102px;
+        top: 44px;
+        bottom: auto;
     }
 
     .signalGrid {
@@ -1693,15 +1721,35 @@ h1 {
     position: fixed;
     left: 16px;
     right: 16px;
-    top: calc(154px + env(safe-area-inset-top));
-    z-index: 520;
-    max-height: calc(100vh - 220px);
+    top: calc(88px + env(safe-area-inset-top));
+    z-index: var(--z-settings);
+    max-height: calc(100dvh - 112px - var(--safe-bottom));
     overflow: auto;
-    padding: 16px;
+    padding: 16px 16px calc(var(--bottom-nav-height) + var(--safe-bottom) + 24px);
     border-radius: 18px;
     background: rgba(9, 14, 26, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 22px 54px rgba(0, 0, 0, 0.5);
+}
+
+.settingsOpen .settingsPanel {
+    box-shadow:
+        0 0 0 9999px rgba(0, 0, 0, 0.62),
+        0 24px 80px rgba(0, 0, 0, 0.56);
+}
+
+.settingsOpen .bottomNav,
+.settingsOpen main,
+.settingsOpen .statusGrid,
+.settingsOpen .accountBar,
+.settingsOpen .headerLocationSelect,
+.settingsOpen .liveBadge,
+.settingsOpen .markerBanner,
+.settingsOpen .signalGrid,
+.settingsOpen .confirmFoundButton,
+.settingsOpen .attunePrompt {
+    z-index: 1;
+    pointer-events: none;
 }
 
 .settingsHeader {
@@ -1791,6 +1839,14 @@ h1 {
     display: block;
     line-height: 1;
     transform-origin: 50% 52%;
+    color: transparent;
+    background: linear-gradient(0deg, #5878ba 18%, #a9c5ff 58%, #f4fbff 88%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    text-shadow:
+        0 -22px 18px rgba(219, 242, 255, 0.55),
+        0 -8px 14px rgba(126, 202, 255, 0.78),
+        0 18px 28px rgba(60, 94, 160, 0.32);
 }
 
 .clueBlock {
@@ -1817,7 +1873,7 @@ h1 {
 .attunePrompt {
     position: absolute;
     left: 50%;
-    bottom: 154px;
+    bottom: 20px;
     z-index: 8;
     width: min(260px, calc(100% - 52px));
     transform: translateX(-50%);
@@ -1899,11 +1955,16 @@ h1 {
         min-width: 0;
     }
 
+    .questSummary .syncPendingButton {
+        grid-column: 2 / 5;
+        width: 100%;
+    }
+
     .questSummaryStats {
         font-size: 12px;
     }
 
     .attunePrompt {
-        bottom: 150px;
+        bottom: 20px;
     }
 }
