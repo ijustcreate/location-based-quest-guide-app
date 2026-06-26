@@ -79,6 +79,50 @@ window.QuestCloud = (function() {
         return mapped;
     }
 
+    async function submitPublicLocation(location) {
+        const supabase = getClient();
+
+        if (!supabase) {
+            return {
+                ok: false,
+                message: "Supabase client unavailable."
+            };
+        }
+
+        const response = await supabase.rpc("submit_public_location", {
+            location_name: location.name,
+            location_hint: location.hint || "",
+            location_clue: location.clue || "",
+            location_latitude: Number(location.latitude),
+            location_longitude: Number(location.longitude),
+            location_accuracy_m: Number(location.accuracy || 0),
+            location_photo_url: location.imageDataUrl && location.imageDataUrl.indexOf("data:") !== 0 ? location.imageDataUrl : null,
+            glyphs: (location.glyphObjectives || []).map(function(objective) {
+                return {
+                    label: objective.label,
+                    shape: objective.shape,
+                    colorFamily: objective.colorFamily,
+                    required: objective.required,
+                    points: objective.points,
+                    evidenceRequirement: objective.evidenceRequirement,
+                    minConfidence: objective.minConfidence
+                };
+            })
+        });
+
+        if (response.error) {
+            return {
+                ok: false,
+                message: response.error.message
+            };
+        }
+
+        return {
+            ok: true,
+            cloudId: response.data
+        };
+    }
+
     function mapRemoteLocation(row) {
         return {
             id: "cloud-" + row.id,
@@ -134,6 +178,7 @@ window.QuestCloud = (function() {
 
     return {
         isAvailable: isAvailable,
-        fetchPublicLocations: fetchPublicLocations
+        fetchPublicLocations: fetchPublicLocations,
+        submitPublicLocation: submitPublicLocation
     };
 })();

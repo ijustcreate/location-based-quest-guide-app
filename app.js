@@ -883,6 +883,8 @@ function savePlace(shouldFollow) {
         return;
     }
 
+    syncLocationToCloud(newLocation);
+
     placeNameInput.value = "";
     hintInput.value = "";
     clueInput.value = "";
@@ -921,6 +923,42 @@ function savePlace(shouldFollow) {
     }
 
     setMode("library");
+}
+
+async function syncLocationToCloud(location) {
+    if (!window.QuestCloud || !window.QuestCloud.isAvailable() || location.visibility === "private") {
+        return;
+    }
+
+    try {
+        const result = await window.QuestCloud.submitPublicLocation(location);
+
+        if (result.ok) {
+            showModal({
+                title: "Saved",
+                message: "This place was saved locally and published to the shared Quest Compass cloud.",
+                actions: [
+                    { label: "OK", className: "primaryButton", onClick: hideModal }
+                ]
+            });
+        } else {
+            showModal({
+                title: "Saved Locally",
+                message: "This place is saved on this device. Cloud sync did not finish: " + result.message,
+                actions: [
+                    { label: "OK", className: "primaryButton", onClick: hideModal }
+                ]
+            });
+        }
+    } catch (error) {
+        showModal({
+            title: "Saved Locally",
+            message: "This place is saved on this device. Cloud sync did not finish: " + (error.message || error),
+            actions: [
+                { label: "OK", className: "primaryButton", onClick: hideModal }
+            ]
+        });
+    }
 }
 
 function buildGlyphObjectivesFromForm() {
