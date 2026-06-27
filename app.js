@@ -124,6 +124,7 @@ const glyphColor3 = document.getElementById("glyphColor3");
 const glyphShape1 = document.getElementById("glyphShape1");
 const glyphShape2 = document.getElementById("glyphShape2");
 const glyphShape3 = document.getElementById("glyphShape3");
+const glyphPickerGrids = Array.from(document.querySelectorAll(".glyphPickerGrid"));
 const glyphIcon1 = document.getElementById("glyphIcon1");
 const glyphIcon2 = document.getElementById("glyphIcon2");
 const glyphIcon3 = document.getElementById("glyphIcon3");
@@ -312,9 +313,12 @@ locationImageInput.addEventListener("change", handleLocationImageSelected);
 glyphIcon1.addEventListener("change", function(event) { handleGlyphIconSelected(event, 0); });
 glyphIcon2.addEventListener("change", function(event) { handleGlyphIconSelected(event, 1); });
 glyphIcon3.addEventListener("change", function(event) { handleGlyphIconSelected(event, 2); });
+[glyphColor1, glyphColor2, glyphColor3, glyphShape1, glyphShape2, glyphShape3].forEach(function(input) {
+    input.addEventListener("change", renderGlyphPickerGrids);
+});
 locationImageButton.addEventListener("click", function() {
     if (pendingLocationImageDataUrl) {
-        showImagePreview(pendingLocationImageDataUrl, "Location Photo");
+        showImagePreview(pendingLocationImageDataUrl, "Waypoint Photo");
     }
 });
 
@@ -323,6 +327,8 @@ modalOverlay.addEventListener("click", function(event) {
         hideModal();
     }
 });
+
+window.addEventListener("online", retryPendingCloudSyncs);
 
 function setMode(mode) {
     const leavingScan = appState.activeTab === "scan" && mode !== "scan";
@@ -521,11 +527,12 @@ function updateScannerUI(result) {
     appState.scanner.frameStability = result.frameStability || 0;
     appState.scanner.lockConfidence = result.lockConfidence || 0;
     appState.scanner.colorFamily = result.colorFamily || "";
+    appState.scanner.glyphId = result.glyphId || null;
     appState.scanner.shape = result.shape || "";
     appState.scanner.lockedAt = result.confirmed ? appState.scanner.lockedAt || new Date().toISOString() : null;
     appState.scanner.error = result.status === "error" ? result.message : null;
 
-    markerTitle.textContent = result.title;
+    markerTitle.textContent = result.title || (result.glyphId ? "Detected: " + formatGlyphLabel(result.glyphId) : "Searching for Sigil");
     markerMessage.textContent = result.holdProgress && !result.confirmed ?
         result.message + " Locking " + result.holdProgress + "%." :
         result.message;
@@ -559,24 +566,34 @@ function handleGlyphScanResult(result) {
 
     if (!match || !match.location) {
         markerTitle.textContent = "Unknown glyph";
-        markerMessage.textContent = "This " + (result.colorFamily || "unknown") + " glyph is not close to a known unlocked location.";
+        markerMessage.textContent = "Detected " + formatGlyphLabel(result.glyphId) + ", but no matching waypoint is close enough.";
         playSoundCue("wrongSymbol");
         return;
     }
 
     const targetLocation = match.location;
+
+    if (match.tooFar) {
+        markerTitle.textContent = "Signal Faint";
+        markerMessage.textContent = "Detected " + formatGlyphLabel(result.glyphId) + ", but this waypoint is still " + formatDistance(match.distanceMeters) + " away.";
+        playSoundCue("wrongSymbol");
+        return;
+    }
+
     const pendingObjectives = targetLocation.glyphObjectives.filter(function(objective) {
         return objective.status !== "complete";
     });
+    const detectedGlyphId = result.glyphId || getGlyphId(result.colorFamily || result.color, result.shape);
     const matchedObjective = pendingObjectives.find(function(objective) {
-        return objective.shape === (result.shape || "hollow-triangle") &&
-            objective.colorFamily === result.colorFamily &&
-            Number(result.lockConfidence || 0) >= Number(objective.minConfidence || 72);
+        return objective.glyphId === detectedGlyphId &&
+            Number(result.lockConfidence || 0) >= Number(objective.minConfidence || 85);
     });
 
     if (!matchedObjective) {
-        markerTitle.textContent = "Glyph mismatch";
-        markerMessage.textContent = "This " + (result.colorFamily || "unknown") + " glyph is not assigned to " + targetLocation.name + ".";
+        const mismatch = getGlyphMismatchMessage(detectedGlyphId, pendingObjectives);
+
+        markerTitle.textContent = mismatch.title;
+        markerMessage.textContent = mismatch.message;
         playSoundCue("wrongSymbol");
         return;
     }
@@ -590,8 +607,9 @@ function handleGlyphScanResult(result) {
         username: getCurrentUsername() || "guest",
         capturedAt: new Date().toISOString(),
         confidence: Number(result.lockConfidence || 0),
+        glyphId: detectedGlyphId,
         colorFamily: result.colorFamily,
-        shape: result.shape || "hollow-triangle",
+        shape: result.shape || "triangle",
         evidenceRequirement: matchedObjective.evidenceRequirement,
         imageDataUrl: cameraCanvas.toDataURL ? cameraCanvas.toDataURL("image/jpeg", 0.76) : "",
         latitude: appState.gps.latitude,
@@ -601,8 +619,46 @@ function handleGlyphScanResult(result) {
         }
     };
 
-    markerTitle.textContent = "Glyph locked";
-    markerMessage.textContent = "You found " + targetLocation.name + ". Hold Attune to bind this " + matchedObjective.label + ".";
+    markerTitle.textContent = "Target Match: " + formatGlyphLabel(detectedGlyphId);
+    markerMessage.textContent = "Hold Attune Sigil to bind " + matchedObjective.label + ".";
+}
+
+function getGlyphMismatchMessage(detectedGlyphId, objectives) {
+    const detected = parseGlyphId(detectedGlyphId);
+    const label = formatGlyphLabel(detectedGlyphId);
+
+    if (!detected) {
+        return {
+            title: "Searching for Sigil",
+            message: "No reliable sigil result yet."
+        };
+    }
+
+    const hasShape = objectives.some(function(objective) {
+        return objective.shape === detected.shape;
+    });
+    const hasColor = objectives.some(function(objective) {
+        return objective.colorFamily === detected.color;
+    });
+
+    if (hasShape && !hasColor) {
+        return {
+            title: "Shape Match, Wrong Color",
+            message: "Wrong Glyph: " + label + ". Keep the shape, find the correct color."
+        };
+    }
+
+    if (hasColor && !hasShape) {
+        return {
+            title: "Color Match, Wrong Shape",
+            message: "Wrong Glyph: " + label + ". Keep the color, find the correct shape."
+        };
+    }
+
+    return {
+        title: "Wrong Glyph: " + label,
+        message: "This sigil is not assigned to the active quest."
+    };
 }
 
 function findNearestGlyphMatch(result) {
@@ -614,9 +670,8 @@ function findNearestGlyphMatch(result) {
     loadKnownLocations().forEach(function(location) {
         const hasMatchingGlyph = location.glyphObjectives.some(function(objective) {
             return objective.status !== "complete" &&
-                objective.colorFamily === result.colorFamily &&
-                objective.shape === (result.shape || "hollow-triangle") &&
-                Number(result.lockConfidence || 0) >= Number(objective.minConfidence || 72);
+                objective.glyphId === (result.glyphId || getGlyphId(result.colorFamily || result.color, result.shape)) &&
+                Number(result.lockConfidence || 0) >= Number(objective.minConfidence || 85);
         });
 
         if (!hasMatchingGlyph) {
@@ -641,10 +696,19 @@ function findNearestGlyphMatch(result) {
     }
 
     if (activeTarget) {
+        let nearestActiveDistance = Infinity;
+
+        getLocationGpsAnchors(activeTarget).forEach(function(anchor) {
+            const distance = calculateDistanceMeters(userLat, userLng, anchor.latitude, anchor.longitude);
+
+            nearestActiveDistance = Math.min(nearestActiveDistance, distance);
+        });
+
         return {
             location: activeTarget,
-            distanceMeters: Infinity,
-            anchor: null
+            distanceMeters: nearestActiveDistance,
+            anchor: null,
+            tooFar: nearestActiveDistance > maxDistance
         };
     }
 
@@ -666,13 +730,13 @@ function showGlyphCompletionModal(completion) {
         findSuggestedNextLocation(location);
 
     showModal({
-        title: done ? "Quest Location Complete" : "Glyph Found",
+        title: done ? "Waypoint Attuned" : "Sigil Bound",
         message: done ?
-            "Congrats, you found " + location.name + ". All required glyphs are complete." :
-            "Congrats, you found " + location.name + ". " + getGlyphProgressText(location),
+            "Sigil Bound. +" + completion.awardedPoints + " Glimmer. " + location.name + " is complete." :
+            "Sigil Bound. +" + completion.awardedPoints + " Glimmer. " + getGlyphProgressText(location),
         actions: nextLocation ? [
             {
-                label: "Next Location",
+                label: "Next Waypoint",
                 className: "primaryButton",
                 onClick: function() {
                     hideModal();
@@ -698,10 +762,23 @@ function findSuggestedNextLocation(location) {
 function updateConfirmFoundButton() {
     const hasLock = appState.scanner.status === "sigilLocked" || appState.scanner.lockConfidence >= 70;
 
-    if (pendingGlyphAttune || !activeTarget || !hasLock) {
+    if (pendingGlyphAttune || appState.scanner.status === "off" || appState.scanner.status === "error") {
         confirmFoundButton.hidden = true;
         confirmFoundButton.disabled = false;
         confirmFoundButton.textContent = "Attune Sigil";
+        return;
+    }
+
+    confirmFoundButton.hidden = false;
+    confirmFoundButton.disabled = true;
+
+    if (!activeTarget) {
+        confirmFoundButton.textContent = "Choose Quest";
+        return;
+    }
+
+    if (!hasLock) {
+        confirmFoundButton.textContent = "Searching";
         return;
     }
 
@@ -714,7 +791,15 @@ function updateBar(barElement, textElement, value) {
     const safeValue = Math.max(0, Math.min(100, Math.round(value || 0)));
 
     barElement.style.width = safeValue + "%";
-    textElement.textContent = safeValue + "%";
+    textElement.textContent = currentSettings.showTechnicalDetails ? safeValue + "%" : getSignalStrengthLabel(safeValue);
+}
+
+function getSignalStrengthLabel(value) {
+    if (value >= 93) return "Strong";
+    if (value >= 85) return "Ready";
+    if (value >= 70) return "Found";
+    if (value >= 42) return "Faint";
+    return "Low";
 }
 
 function renderAppState() {
@@ -738,10 +823,10 @@ function getHeaderSubtitle() {
     }
 
     if (appState.activeTab === "create") return "Forge Quest";
-    if (appState.activeTab === "library") return "Field Notes";
+    if (appState.activeTab === "library") return "Quest Journal";
 
     if (!activeTarget) return "Trail Idle";
-    if (appState.gps.status !== "active") return "Target Locked";
+    if (appState.gps.status !== "active") return "Quest Locked";
     return "Trail Active";
 }
 
@@ -763,7 +848,7 @@ function renderStatusChips() {
     gpsChipText.textContent = getGpsChipLabel();
     compassChipText.textContent = getCompassChipLabel();
     scannerChipText.textContent = getScannerChipLabel();
-    targetChipText.textContent = hasTarget ? "Locked" : "None";
+    targetChipText.textContent = hasTarget ? "Quest" : "None";
 }
 
 function getGpsChipLabel() {
@@ -809,7 +894,7 @@ function renderGpsReadouts() {
     }
 
     const text =
-        "GPS Active<br>Accuracy: " + Math.round(appState.gps.accuracyMeters || 0) + " m" +
+        "Trail Signal Active<br>Accuracy: " + Math.round(appState.gps.accuracyMeters || 0) + " m" +
         "<br>" + getFacingText();
 
     gpsReadout.innerHTML = text;
@@ -843,7 +928,7 @@ function savePlace(shouldFollow) {
 
     if (!draftCoordinates) {
         showModal({
-            title: "Location Needed",
+            title: "Waypoint Needed",
             message: "Enable GPS, use current GPS, or paste Google Maps coordinates before saving.",
             actions: [
                 { label: "Enable GPS", className: "primaryButton", onClick: enableGPS },
@@ -970,9 +1055,9 @@ function resetCreateForm() {
     glyphColor1.value = "red";
     glyphColor2.value = "";
     glyphColor3.value = "";
-    glyphShape1.value = "hollow-triangle";
-    glyphShape2.value = "hollow-triangle";
-    glyphShape3.value = "hollow-triangle";
+    glyphShape1.value = "triangle";
+    glyphShape2.value = "triangle";
+    glyphShape3.value = "triangle";
     glyphIcon1.value = "";
     glyphIcon2.value = "";
     glyphIcon3.value = "";
@@ -986,6 +1071,7 @@ function resetCreateForm() {
     locationImageButton.style.backgroundImage = "";
     locationImageButton.textContent = "📍";
     createGpsReadout.textContent = appState.gps.status === "active" ? "Using current GPS when saving." : "Enable GPS to capture this place.";
+    renderGlyphPickerGrids();
 }
 
 function getDraftCoordinates() {
@@ -1052,7 +1138,9 @@ function applyManualCoordinatesToDraft() {
     createGpsReadout.textContent = "Draft location set from pasted coordinates.";
 }
 
-async function syncLocationToCloud(location) {
+async function syncLocationToCloud(location, options) {
+    const syncOptions = options || {};
+
     if (!window.QuestCloud || !window.QuestCloud.isAvailable() || location.visibility === "private") {
         return;
     }
@@ -1063,36 +1151,42 @@ async function syncLocationToCloud(location) {
         if (result.ok) {
             markLocationCloudSync(location.id, "synced", { cloudId: result.cloudId });
             renderLocations();
-            showModal({
-                title: "Saved",
-                message: "This place was saved locally and shared through the Explorer Network.",
-                actions: [
-                    { label: "OK", className: "primaryButton", onClick: hideModal }
-                ]
-            });
+            if (!syncOptions.silent) {
+                showModal({
+                    title: "Saved",
+                    message: "This place was saved locally and shared through the Explorer Network.",
+                    actions: [
+                        { label: "OK", className: "primaryButton", onClick: hideModal }
+                    ]
+                });
+            }
         } else {
             markLocationCloudSync(location.id, "pending", result);
             renderLocations();
+            if (!syncOptions.silent) {
+                showModal({
+                    title: "Cloud Sync Pending",
+                    message: getCloudPendingMessage(result.message),
+                    actions: [
+                        { label: "Retry", className: "primaryButton", onClick: function() { hideModal(); retryCloudSync(location.id); } },
+                        { label: "OK", className: "primaryButton", onClick: hideModal }
+                    ]
+                });
+            }
+        }
+    } catch (error) {
+        markLocationCloudSync(location.id, "pending", { message: error.message || String(error) });
+        renderLocations();
+        if (!syncOptions.silent) {
             showModal({
                 title: "Cloud Sync Pending",
-                message: getCloudPendingMessage(result.message),
+                message: getCloudPendingMessage(error.message || String(error)),
                 actions: [
                     { label: "Retry", className: "primaryButton", onClick: function() { hideModal(); retryCloudSync(location.id); } },
                     { label: "OK", className: "primaryButton", onClick: hideModal }
                 ]
             });
         }
-    } catch (error) {
-        markLocationCloudSync(location.id, "pending", { message: error.message || String(error) });
-        renderLocations();
-        showModal({
-            title: "Cloud Sync Pending",
-            message: getCloudPendingMessage(error.message || String(error)),
-            actions: [
-                { label: "Retry", className: "primaryButton", onClick: function() { hideModal(); retryCloudSync(location.id); } },
-                { label: "OK", className: "primaryButton", onClick: hideModal }
-            ]
-        });
     }
 }
 
@@ -1114,23 +1208,81 @@ function retryCloudSync(locationId) {
     }
 }
 
-function buildGlyphObjectivesFromForm() {
+function retryPendingCloudSyncs() {
+    loadLocations().filter(function(location) {
+        return location.cloudSyncStatus === "pending";
+    }).forEach(function(location) {
+        syncLocationToCloud(location, { silent: true });
+    });
+}
+
+function renderGlyphPickerGrids() {
+    const rows = getGlyphFormRows();
+
+    glyphPickerGrids.forEach(function(grid, index) {
+        const row = rows[index];
+        const selectedGlyphId = getGlyphId(row.colorSelect.value, row.shapeSelect.value);
+
+        grid.innerHTML = "";
+
+        GLYPH_LIST.forEach(function(glyph) {
+            const button = document.createElement("button");
+
+            button.type = "button";
+            button.className = "glyphPickerButton glyph-" + glyph.color + " glyph-" + glyph.shape;
+            button.classList.toggle("selectedGlyph", glyph.id === selectedGlyphId);
+            button.dataset.glyphId = glyph.id;
+            button.innerHTML =
+                "<span class='glyphMiniIcon'></span>" +
+                "<small>" + escapeHTML(glyph.label) + "</small>";
+            button.addEventListener("click", function() {
+                selectGlyphForRow(index, glyph.id);
+            });
+
+            grid.appendChild(button);
+        });
+    });
+}
+
+function selectGlyphForRow(index, glyphId) {
+    const glyph = parseGlyphId(glyphId);
+    const row = getGlyphFormRows()[index];
+
+    if (!glyph || !row) {
+        return;
+    }
+
+    row.colorSelect.value = glyph.color;
+    row.shapeSelect.value = glyph.shape;
+    renderGlyphPickerGrids();
+}
+
+function getGlyphFormRows() {
     return [
         { colorSelect: glyphColor1, shapeSelect: glyphShape1, requiredInput: glyphRequired1, iconIndex: 0 },
         { colorSelect: glyphColor2, shapeSelect: glyphShape2, requiredInput: glyphRequired2, iconIndex: 1 },
         { colorSelect: glyphColor3, shapeSelect: glyphShape3, requiredInput: glyphRequired3, iconIndex: 2 }
-    ].filter(function(row) {
+    ];
+}
+
+function buildGlyphObjectivesFromForm() {
+    return getGlyphFormRows().filter(function(row) {
         return row.colorSelect.value;
     }).map(function(row, index) {
+        const glyphId = getGlyphId(row.colorSelect.value, row.shapeSelect.value);
+
         return {
-            label: row.colorSelect.value + " " + row.shapeSelect.value.replace("hollow-", ""),
-            shape: row.shapeSelect.value,
-            colorFamily: row.colorSelect.value,
+            glyphId: glyphId,
+            label: formatGlyphLabel(glyphId),
+            shape: normalizeGlyphShape(row.shapeSelect.value),
+            colorFamily: normalizeGlyphColor(row.colorSelect.value),
+            color: normalizeGlyphColor(row.colorSelect.value),
             iconDataUrl: pendingGlyphIconDataUrls[row.iconIndex],
             required: row.requiredInput.checked,
             points: index === 0 ? 2 : 1,
+            rewardPoints: index === 0 ? 2 : 1,
             evidenceRequirement: "photo",
-            minConfidence: Number(currentSettings.attuneThreshold || 72),
+            minConfidence: Number(currentSettings.attuneThreshold || 85),
             status: "pending"
         };
     });
@@ -1222,12 +1374,12 @@ async function refreshCloudPublicLocations(container) {
 
         if (locations.length === 0) {
             cloudStatus.innerHTML =
-                "<div class='sectionLabel'>EXPLORER NETWORK</div><p>No public quests found yet.</p>";
+                "<div class='sectionLabel'>EXPLORER NETWORK</div><p>No public adventures found yet.</p>";
             return;
         }
 
         cloudStatus.innerHTML =
-            "<div class='sectionLabel'>EXPLORER NETWORK</div><h3>" + (hasGps ? "Public Quests Near Me" : "Public Quests") + "</h3>";
+            "<div class='sectionLabel'>EXPLORER NETWORK</div><h3>" + (hasGps ? "Nearby Adventures" : "Public Adventures") + "</h3>";
 
         locations.forEach(function(location) {
             container.appendChild(renderCloudLocationCard(location));
@@ -1275,7 +1427,7 @@ function renderUsersView(container) {
             "<div class='sectionLabel'>USER</div>" +
             "<h3>" + escapeHTML(account.username) + (isAdminUser(account.username) ? " · Admin" : "") + "</h3>" +
             "<p>Explorer Rank " + getExplorerRank(account) + "</p>" +
-            "<p>Locations Found: " + account.unlockedLocationIds.length +
+            "<p>Waypoints Found: " + account.unlockedLocationIds.length +
             "<br>Artifacts: " + account.artifacts.length +
             "<br>Points: " + account.points + "</p>" +
             "</div>";
@@ -1339,7 +1491,7 @@ function renderLibrarySelect(locations) {
 }
 
 function renderChainSelect(locations) {
-    chainNextLocationSelect.innerHTML = "<option value=''>No next location yet</option>";
+    chainNextLocationSelect.innerHTML = "<option value=''>No next waypoint yet</option>";
 
     locations.forEach(function(location) {
         const option = document.createElement("option");
@@ -1488,7 +1640,7 @@ function renderSettingsPanel() {
         settingsAccountStats.innerHTML =
             "<p><strong>" + escapeHTML(currentUser.username) + "</strong></p>" +
             "<p>Explorer Rank: " + getExplorerRank(currentUser) + "</p>" +
-            "<p>Locations Found: " + currentUser.unlockedLocationIds.length + "</p>" +
+            "<p>Waypoints Found: " + currentUser.unlockedLocationIds.length + "</p>" +
             "<p>Artifacts Collected: " + currentUser.artifacts.length + "</p>" +
             "<p>Secrets Solved: " + currentUser.secretsSolved + "</p>" +
             "<p>Captures: " + currentUser.captureHistory.length + " - Visits: " + currentUser.visitHistory.length + "</p>" +
@@ -1550,7 +1702,7 @@ function saveSettingsFromPanel() {
             showTechnicalDetails: document.getElementById("settingShowTechnicalDetails").checked,
             hideExactCoordinates: document.getElementById("settingHideExactCoordinates").checked,
             scannerSensitivity: document.getElementById("settingScannerSensitivity").value,
-            attuneThreshold: Number(document.getElementById("settingAttuneThreshold").value || 75),
+            attuneThreshold: Number(document.getElementById("settingAttuneThreshold").value || 85),
             rewardResource1: Number(document.getElementById("settingRewardResource1").value || 0),
             rewardResource2: Number(document.getElementById("settingRewardResource2").value || 0)
         }
@@ -1561,7 +1713,7 @@ function saveSettingsFromPanel() {
 }
 
 function updateAttuneAvailability() {
-    const threshold = Number(currentSettings.attuneThreshold || 75);
+    const threshold = Math.max(70, Number(currentSettings.attuneThreshold || 85));
     const signalSeconds = Number(currentSettings.attuneSignalSeconds || 3);
     const confidenceReady = appState.scanner.lockConfidence >= threshold;
 
@@ -1663,8 +1815,8 @@ function completeAttuneCapture() {
         renderLocations();
         renderSettingsPanel();
         renderAppState();
-        markerTitle.textContent = "Glyph attuned";
-        markerMessage.textContent = "Congrats, you found " + completion.location.name + ". +" + completion.awardedPoints + " points.";
+        markerTitle.textContent = "Waypoint Attuned";
+        markerMessage.textContent = "Sigil Bound. +" + completion.awardedPoints + " Glimmer.";
         attuneButton.querySelector("span").textContent = "Sigil Bound";
         playSoundCue("questComplete");
         showGlyphCompletionModal(completion);
@@ -1695,7 +1847,7 @@ function completeAttuneCapture() {
     if (nextLocation) {
         showModal({
             title: "Reward Revealed",
-            message: getRewardRevealText(captureLocation) + " Next location: " + nextLocation.name,
+            message: getRewardRevealText(captureLocation) + " Next waypoint: " + nextLocation.name,
             actions: [
                 {
                     label: "Follow Next",
@@ -1731,10 +1883,10 @@ function getRewardRevealText(location) {
 function confirmFoundLocation() {
     if (!activeTarget) {
         showModal({
-            title: "Choose A Target",
-            message: "Select a location from Field Notes before confirming a scanner lock.",
+            title: "Choose A Quest",
+            message: "Select an adventure from the Quest Journal before attuning a sigil.",
             actions: [
-                { label: "Open Field Notes", className: "primaryButton", onClick: function() { hideModal(); setMode("library"); } },
+                { label: "Open Quest Journal", className: "primaryButton", onClick: function() { hideModal(); setMode("library"); } },
                 { label: "Close", className: "secondaryButton", onClick: hideModal }
             ]
         });
@@ -1761,8 +1913,8 @@ function confirmFoundLocation() {
     renderAppState();
 
     showModal({
-        title: "Location Confirmed",
-        message: "The marker is locked and this location now has a fresher GPS sample. Hold Attune on each matching glyph to earn completion rewards.",
+        title: "Waypoint Attuned",
+        message: "The waypoint has a fresher GPS sample. Hold Attune Sigil on each matching glyph to earn rewards.",
         actions: [
             { label: "Continue", className: "primaryButton", onClick: hideModal }
         ]
@@ -1772,7 +1924,7 @@ function confirmFoundLocation() {
 function renderLocationDetail(container, location) {
     const card = document.createElement("div");
     const distanceText = getDistanceTextForLocation(location);
-    const savedMeta = "Saved nearby - Accuracy " + Math.round(location.accuracy || 0) + "m";
+    const savedMeta = "Recorded nearby - Accuracy " + Math.round(location.accuracy || 0) + "m";
     const createdAt = location.createdAt ? new Date(location.createdAt).toLocaleString() : "Unknown";
     const nextLocation = loadLocations().find(function(savedLocation) {
         return savedLocation.id === location.chainNextLocationId;
@@ -1785,11 +1937,10 @@ function renderLocationDetail(container, location) {
     const glyphList = location.glyphObjectives.map(function(objective) {
         return "<li class='" + (objective.status === "complete" ? "glyphComplete" : "") + "'>" +
             renderGlyphIconMarkup(objective) +
-            "<span>" + escapeHTML(objective.colorFamily) + " " + escapeHTML(objective.shape.replaceAll("-", " ")) + "</span>" +
-            "<strong>" + escapeHTML(objective.status) + " · " + objective.points + " pts</strong>" +
+            "<span>" + escapeHTML(formatGlyphLabel(objective.glyphId)) + "</span>" +
+            "<strong>" + escapeHTML(objective.status) + " - " + objective.points + " pts</strong>" +
             "</li>";
-    }).join("");
-    const completedGlyphs = location.glyphObjectives.filter(function(objective) {
+    }).join("");    const completedGlyphs = location.glyphObjectives.filter(function(objective) {
         return objective.status === "complete";
     }).length;
     const syncBadge = location.cloudSyncStatus === "pending" ?
@@ -1814,9 +1965,9 @@ function renderLocationDetail(container, location) {
         "<small>Answer: " + escapeHTML(location.clueAnswer || "Scanner capture") + "</small>" +
         "</div>" +
         "<div class='libraryMetaGrid compactMetaGrid'>" +
-        "<div><small>Status</small><strong>" + escapeHTML(distanceText) + "</strong></div>" +
+        "<div><small>Distance</small><strong>" + escapeHTML(distanceText) + "</strong></div>" +
         "<div><small>Creator</small><strong>" + escapeHTML(location.creatorUsername) + "</strong></div>" +
-        "<div><small>Saved</small><strong>" + escapeHTML(createdAt) + "</strong></div>" +
+        "<div><small>Recorded</small><strong>" + escapeHTML(createdAt) + "</strong></div>" +
         "<div><small>Accuracy</small><strong>" + Math.round(location.accuracy || 0) + " m</strong></div>" +
         "<div><small>Facing</small><strong>" + escapeHTML(formatFacing(location.facingDegrees)) + "</strong></div>" +
         "<div><small>Next</small><strong>" + escapeHTML(nextLocation ? nextLocation.name : "Reward screen") + "</strong></div>" +
@@ -1879,7 +2030,7 @@ function renderLocationDetail(container, location) {
     card.querySelector(".deleteButton").addEventListener("click", function() {
         showModal({
             title: "Delete Place",
-            message: "Remove " + location.name + " from Field Notes?",
+            message: "Remove " + location.name + " from the Quest Journal?",
             actions: [
                 {
                     label: "Delete",
@@ -1937,12 +2088,13 @@ function loadLocationIntoCreateForm(location) {
         const requiredInput = [glyphRequired1, glyphRequired2, glyphRequired3][index];
 
         colorSelect.value = objective ? objective.colorFamily : (index === 0 ? "red" : "");
-        shapeSelect.value = objective ? objective.shape : "hollow-triangle";
+        shapeSelect.value = objective ? normalizeGlyphShape(objective.shape) || "triangle" : "triangle";
         requiredInput.checked = objective ? objective.required !== false : true;
         pendingGlyphIconDataUrls[index] = objective ? objective.iconDataUrl || "" : "";
     });
 
     createGpsReadout.textContent = "Editing saved location. Coordinates stay unchanged unless you use current GPS or paste new coordinates.";
+    renderGlyphPickerGrids();
 }
 
 function renderGlyphIconMarkup(objective) {
@@ -1976,7 +2128,7 @@ function getDistanceTextForLocation(location) {
         location.longitude
     );
 
-    return "Distance: " + formatDistance(distance);
+    return getProximityLabel(distance) + " - " + formatDistance(distance);
 }
 
 function getFacingText() {
@@ -1998,20 +2150,20 @@ function formatFacing(degrees) {
 function updateNavigationDisplay() {
     if (!activeTarget) {
         directionArrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
-        bearingReadout.textContent = "No target";
+        bearingReadout.textContent = "No quest";
         updateTargetIcon(null);
 
-        trailTargetName.textContent = "No Active Trail";
-        trailTargetHint.textContent = "Choose a saved place from Field Notes.";
+        trailTargetName.textContent = "No Active Quest";
+        trailTargetHint.textContent = "Choose an adventure from the Quest Journal.";
         trailDistance.textContent = "--";
         trailAccuracy.textContent = "Accuracy unknown";
         glyphProgressText.textContent = "Glyphs Found: 0 / 0";
         foundGlyphButton.disabled = true;
 
-        scanTargetName.textContent = "No target selected";
-        scanTargetMeta.textContent = "Choose a place from Field Notes.";
+        scanTargetName.textContent = "No quest selected";
+        scanTargetMeta.textContent = "Choose an adventure from the Quest Journal.";
 
-        navigationReadout.textContent = "No navigation target selected.";
+        navigationReadout.textContent = "No quest selected.";
         return;
     }
 
@@ -2022,14 +2174,14 @@ function updateNavigationDisplay() {
     trailTargetHint.textContent = activeTarget.hint || "Follow the signal.";
 
     scanTargetName.textContent = activeTarget.name;
-    scanTargetMeta.textContent = "Saved Location";
+    scanTargetMeta.textContent = "Quest Waypoint";
 
     if (appState.gps.status !== "active" || appState.gps.latitude === null || appState.gps.longitude === null) {
         directionArrow.style.transform = "translate(-50%, -50%) rotate(0deg)";
-        bearingReadout.textContent = "Enable GPS";
-        trailDistance.textContent = "GPS inactive";
-        trailAccuracy.textContent = "Enable GPS";
-        navigationReadout.textContent = "Target locked. Enable GPS to calculate distance.";
+        bearingReadout.textContent = "Start Trail";
+        trailDistance.textContent = "Quest Locked";
+        trailAccuracy.textContent = "Use GPS to follow the signal";
+        navigationReadout.textContent = "Quest locked. Start Trail to calculate distance.";
         return;
     }
 
@@ -2059,16 +2211,21 @@ function updateNavigationDisplay() {
             directionLabel + " " + Math.round(bearing) + " degrees" :
             "Calibrate heading";
 
-    trailDistance.textContent = formatDistance(distance);
+    trailDistance.innerHTML =
+        "<span class='proximityLabel'>" + escapeHTML(getProximityLabel(distance)) + "</span>" +
+        "<span class='exactDistance'>" + escapeHTML(formatDistance(distance)) + "</span>";
     trailAccuracy.textContent = "GPS +/-" + Math.round(appState.gps.accuracyMeters || 0) + " m";
 
     navigationReadout.innerHTML =
-        "Target: " + escapeHTML(activeTarget.name) +
-        "<br>Distance: " + formatDistance(distance) +
-        "<br>Map Direction: " + directionLabel +
-        "<br>Target Bearing: " + Math.round(bearing) + " degrees" +
-        "<br>Phone Heading: " + (appState.compass.headingDegrees === null ? "not enabled" : Math.round(appState.compass.headingDegrees) + " degrees") +
-        "<br>Status: " + (arrived ? "Discovery reached" : "Move toward target");
+        "Quest: " + escapeHTML(activeTarget.name) +
+        "<br>Proximity: " + escapeHTML(getProximityLabel(distance)) +
+        "<br>Exact distance: " + formatDistance(distance) +
+        "<br>Map direction: " + directionLabel +
+        (currentSettings.showTechnicalDetails ?
+            "<br>Quest bearing: " + Math.round(bearing) + " degrees" +
+            "<br>Phone heading: " + (appState.compass.headingDegrees === null ? "not enabled" : Math.round(appState.compass.headingDegrees) + " degrees") :
+            "") +
+        "<br>Status: " + (arrived ? "Destination Found" : "Follow the signal");
 }
 
 function getGlyphProgressText(location) {
@@ -2160,8 +2317,8 @@ function showModal(config) {
 }
 
 function showImagePreview(imageDataUrl, title) {
-    modalTitle.textContent = title || "Location Photo";
-    modalMessage.innerHTML = "<img class='imagePreviewFull' alt='Saved location photo' src='" + imageDataUrl + "'>";
+    modalTitle.textContent = title || "Waypoint Photo";
+    modalMessage.innerHTML = "<img class='imagePreviewFull' alt='Saved waypoint photo' src='" + imageDataUrl + "'>";
     modalActions.innerHTML = "";
 
     const closeButton = document.createElement("button");
@@ -2249,5 +2406,7 @@ function escapeHTML(text) {
 
 loadAccounts();
 landingGate.hidden = false;
+renderGlyphPickerGrids();
 renderAppState();
 renderLocations();
+retryPendingCloudSyncs();

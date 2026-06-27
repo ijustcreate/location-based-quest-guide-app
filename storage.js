@@ -10,8 +10,29 @@ const SETTINGS_KEY = "questCompass.settings.v1";
 const QUEST_STATS_KEY = "questCompass.questStats.v1";
 const PUBLIC_LOCATIONS_KEY = STORAGE_KEY + ".public";
 
-const GLYPH_COLORS = ["red", "green", "pink", "blue"];
-const GLYPH_SHAPES = ["hollow-triangle", "hollow-circle", "hollow-square"];
+const GLYPH_COLORS = ["red", "yellow", "blue", "green", "black"];
+const GLYPH_SHAPES = ["triangle", "circle", "square"];
+const GLYPH_LIST = GLYPH_COLORS.flatMap(function(color) {
+    return GLYPH_SHAPES.map(function(shape) {
+        return {
+            id: color + "_" + shape,
+            color: color,
+            shape: shape,
+            label: toTitleCase(color) + " " + toTitleCase(shape)
+        };
+    });
+});
+
+window.QuestGlyphs = {
+    colors: GLYPH_COLORS,
+    shapes: GLYPH_SHAPES,
+    list: GLYPH_LIST,
+    getGlyphId: getGlyphId,
+    parseGlyphId: parseGlyphId,
+    normalizeGlyphColor: normalizeGlyphColor,
+    normalizeGlyphShape: normalizeGlyphShape,
+    formatGlyphLabel: formatGlyphLabel
+};
 
 const DEFAULT_SETTINGS = {
     highAccuracyGps: true,
@@ -21,7 +42,7 @@ const DEFAULT_SETTINGS = {
     showTechnicalDetails: false,
     hideExactCoordinates: true,
     scannerSensitivity: "balanced",
-    attuneThreshold: 75,
+    attuneThreshold: 85,
     attuneSignalSeconds: 3,
     attuneHoldSeconds: 3,
     showLandingOnOpen: true,
@@ -36,6 +57,72 @@ function createLocationId() {
 
 function createGlyphObjectiveId() {
     return "glyph-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+}
+
+function toTitleCase(value) {
+    const text = String(value || "");
+
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function normalizeGlyphColor(color) {
+    const value = String(color || "").replace("color-", "").toLowerCase();
+
+    if (value === "pink" || value === "orange") {
+        return "red";
+    }
+
+    return GLYPH_COLORS.includes(value) ? value : null;
+}
+
+function normalizeGlyphShape(shape) {
+    const value = String(shape || "").replace("hollow-", "").toLowerCase();
+
+    return GLYPH_SHAPES.includes(value) ? value : null;
+}
+
+function getGlyphId(color, shape) {
+    const safeColor = normalizeGlyphColor(color);
+    const safeShape = normalizeGlyphShape(shape);
+
+    if (!safeColor || !safeShape) {
+        return null;
+    }
+
+    return safeColor + "_" + safeShape;
+}
+
+function parseGlyphId(glyphId) {
+    const text = String(glyphId || "").toLowerCase();
+    const parts = text.split("_");
+
+    if (parts.length !== 2) {
+        return null;
+    }
+
+    const color = normalizeGlyphColor(parts[0]);
+    const shape = normalizeGlyphShape(parts[1]);
+
+    if (!color || !shape) {
+        return null;
+    }
+
+    return {
+        id: color + "_" + shape,
+        color: color,
+        shape: shape,
+        label: formatGlyphLabel(color + "_" + shape)
+    };
+}
+
+function formatGlyphLabel(glyphOrColor, shape) {
+    const parsed = shape ? parseGlyphId(getGlyphId(glyphOrColor, shape)) : parseGlyphId(glyphOrColor);
+
+    if (!parsed) {
+        return "Unassigned Sigil";
+    }
+
+    return toTitleCase(parsed.color) + " " + toTitleCase(parsed.shape);
 }
 
 function isAdminUser(username) {
@@ -289,23 +376,27 @@ function getAllLocationStorageKeys() {
 }
 
 function normalizeGlyphObjective(objective, index) {
-    const colorFamily = GLYPH_COLORS.includes(objective.colorFamily || objective.color) ?
-        (objective.colorFamily || objective.color) :
-        "red";
-    const shape = GLYPH_SHAPES.includes(objective.shape) ? objective.shape : "hollow-triangle";
-    const status = objective.status === "complete" ? "complete" : "pending";
+    const parsedGlyph = parseGlyphId(objective.glyphId);
+    const colorFamily = parsedGlyph ? parsedGlyph.color : normalizeGlyphColor(objective.colorFamily || objective.color) || "red";
+    const shape = parsedGlyph ? parsedGlyph.shape : normalizeGlyphShape(objective.shape) || "triangle";
+    const glyphId = getGlyphId(colorFamily, shape);
+    const status = objective.status === "complete" || objective.found === true ? "complete" : "pending";
 
     return {
         id: objective.id || createGlyphObjectiveId(),
-        label: objective.label || colorFamily + " triangle " + (index + 1),
+        glyphId: glyphId,
+        label: objective.label || formatGlyphLabel(glyphId) + " " + (index + 1),
         shape: shape,
         colorFamily: colorFamily,
+        color: colorFamily,
         iconDataUrl: objective.iconDataUrl || "",
         required: objective.required !== false,
-        points: Number(objective.points ?? 1),
+        points: Number(objective.rewardPoints ?? objective.points ?? 1),
+        rewardPoints: Number(objective.rewardPoints ?? objective.points ?? 1),
         evidenceRequirement: objective.evidenceRequirement || "photo",
         minConfidence: Number(objective.minConfidence ?? 72),
         status: status,
+        found: status === "complete",
         completedAt: objective.completedAt || null,
         completedBy: objective.completedBy || null,
         sightings: Array.isArray(objective.sightings) ? objective.sightings : []
@@ -319,7 +410,7 @@ function normalizeLocation(location) {
         [
             normalizeGlyphObjective({
                 colorFamily: location.sigil && location.sigil.colorFamily ? location.sigil.colorFamily : "red",
-                shape: "hollow-triangle",
+                shape: "triangle",
                 required: true,
                 points: 1,
                 minConfidence: 72
@@ -638,6 +729,7 @@ function completeGlyphObjective(locationId, objectiveId, sighting) {
 
             if (matchedObjective.status !== "complete") {
                 matchedObjective.status = "complete";
+                matchedObjective.found = true;
                 matchedObjective.completedAt = sighting.capturedAt;
                 matchedObjective.completedBy = sighting.username;
                 if (!awardedGlyph) {

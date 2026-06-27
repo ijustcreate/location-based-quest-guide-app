@@ -90,10 +90,10 @@
                     </span>
                 </button>
 
-                <button id="targetChip" class="statusChip" type="button" aria-label="Open library">
+                <button id="targetChip" class="statusChip" type="button" aria-label="Open quest journal">
                     <span class="chipIcon">🎯</span>
                     <span>
-                        <strong>Target</strong>
+                        <strong>Quest</strong>
                         <small id="targetChipText">None</small>
                     </span>
                 </button>
@@ -136,7 +136,7 @@
                     </select>
 
                     <label for="settingAttuneThreshold">Attune threshold</label>
-                    <input id="settingAttuneThreshold" type="number" min="50" max="100">
+                    <input id="settingAttuneThreshold" type="number" min="70" max="100">
 
                     <label for="settingRewardResource1">Reward resource 1</label>
                     <input id="settingRewardResource1" type="number" min="0">
@@ -187,7 +187,7 @@
                         </div>
 
                         <div id="bearingReadout" class="bearingReadout">
-                            No target
+                            No quest
                         </div>
 
                     </div>
@@ -199,9 +199,9 @@
                     <div class="targetIcon">🌳</div>
 
                     <div class="targetMain">
-                        <div class="sectionLabel">ACTIVE TARGET</div>
-                        <h2 id="trailTargetName">No Active Trail</h2>
-                        <p id="trailTargetHint">Choose a saved place from Library.</p>
+                        <div class="sectionLabel">ACTIVE QUEST</div>
+                        <h2 id="trailTargetName">No Active Quest</h2>
+                        <p id="trailTargetHint">Choose an adventure from the Quest Journal.</p>
                     </div>
 
                     <div class="targetStats">
@@ -253,7 +253,7 @@
                 <div class="readoutCard">
                     <div id="gpsReadout">GPS inactive.</div>
                     <div id="headingReadout">Compass inactive.</div>
-                    <div id="navigationReadout">No navigation target selected.</div>
+                    <div id="navigationReadout">No quest selected.</div>
                 </div>
 
             </section>
@@ -354,8 +354,8 @@
 
                     <div>
                         <div class="sectionLabel">CURRENT TARGET</div>
-                        <h2 id="scanTargetName">No target selected</h2>
-                        <p id="scanTargetMeta">Choose a place from Library.</p>
+                        <h2 id="scanTargetName">No quest selected</h2>
+                        <p id="scanTargetMeta">Choose an adventure from the Quest Journal.</p>
                     </div>
 
                     <div class="miniCompass">
@@ -378,7 +378,7 @@
                         <div class="mapPin">📍</div>
                     </div>
 
-                    <label for="locationImageInput">Location / Symbol Photo</label>
+                    <label for="locationImageInput">Waypoint / Symbol Photo</label>
                     <input id="locationImageInput" type="file" accept="image/*" capture="environment">
 
                     <label for="placeNameInput">Place Name</label>
@@ -426,15 +426,17 @@
                             <label for="glyphColor1">Glyph 1</label>
                             <select id="glyphColor1" class="glyphColorSelect">
                                 <option value="red">Red</option>
-                                <option value="green">Green</option>
-                                <option value="pink">Pink</option>
+                                <option value="yellow">Yellow</option>
                                 <option value="blue">Blue</option>
+                                <option value="green">Green</option>
+                                <option value="black">Black</option>
                             </select>
                             <select id="glyphShape1" class="glyphShapeSelect">
-                                <option value="hollow-triangle">Triangle</option>
-                                <option value="hollow-circle">Circle</option>
-                                <option value="hollow-square">Square</option>
+                                <option value="triangle">Triangle</option>
+                                <option value="circle">Circle</option>
+                                <option value="square">Square</option>
                             </select>
+                            <div class="glyphPickerGrid" data-glyph-picker="0"></div>
                             <input id="glyphIcon1" type="file" accept="image/*" capture="environment" aria-label="Glyph 1 icon photo">
                             <label><input id="glyphRequired1" type="checkbox" checked> Required</label>
                         </div>
@@ -444,15 +446,17 @@
                             <select id="glyphColor2" class="glyphColorSelect">
                                 <option value="">None</option>
                                 <option value="red">Red</option>
-                                <option value="green">Green</option>
-                                <option value="pink">Pink</option>
+                                <option value="yellow">Yellow</option>
                                 <option value="blue">Blue</option>
+                                <option value="green">Green</option>
+                                <option value="black">Black</option>
                             </select>
                             <select id="glyphShape2" class="glyphShapeSelect">
-                                <option value="hollow-triangle">Triangle</option>
-                                <option value="hollow-circle">Circle</option>
-                                <option value="hollow-square">Square</option>
+                                <option value="triangle">Triangle</option>
+                                <option value="circle">Circle</option>
+                                <option value="square">Square</option>
                             </select>
+                            <div class="glyphPickerGrid" data-glyph-picker="1"></div>
                             <input id="glyphIcon2" type="file" accept="image/*" capture="environment" aria-label="Glyph 2 icon photo">
                             <label><input id="glyphRequired2" type="checkbox" checked> Required</label>
                         </div>
@@ -462,21 +466,23 @@
                             <select id="glyphColor3" class="glyphColorSelect">
                                 <option value="">None</option>
                                 <option value="red">Red</option>
-                                <option value="green">Green</option>
-                                <option value="pink">Pink</option>
+                                <option value="yellow">Yellow</option>
                                 <option value="blue">Blue</option>
+                                <option value="green">Green</option>
+                                <option value="black">Black</option>
                             </select>
                             <select id="glyphShape3" class="glyphShapeSelect">
-                                <option value="hollow-triangle">Triangle</option>
-                                <option value="hollow-circle">Circle</option>
-                                <option value="hollow-square">Square</option>
+                                <option value="triangle">Triangle</option>
+                                <option value="circle">Circle</option>
+                                <option value="square">Square</option>
                             </select>
+                            <div class="glyphPickerGrid" data-glyph-picker="2"></div>
                             <input id="glyphIcon3" type="file" accept="image/*" capture="environment" aria-label="Glyph 3 icon photo">
                             <label><input id="glyphRequired3" type="checkbox" checked> Required</label>
                         </div>
                     </div>
 
-                    <label for="chainNextLocationSelect">Next Location In Chain</label>
+                    <label for="chainNextLocationSelect">Next Waypoint In Chain</label>
                     <select id="chainNextLocationSelect">
                         <option value="">No next location yet</option>
                     </select>
@@ -487,7 +493,7 @@
 
                     <div class="locationDataTools">
                         <button id="useCurrentLocationButton" class="secondaryButton" type="button">
-                            Use Current GPS For This Location
+                            Use Current GPS For This Waypoint
                         </button>
                         <label for="manualCoordinatesInput">Paste Google Maps Coordinates</label>
                         <input id="manualCoordinatesInput" type="text" placeholder="Example: 33.812345, -117.912345">
@@ -513,7 +519,7 @@
                 <div class="libraryHeader">
                     <div>
                         <div class="sectionLabel">FIELD NOTES</div>
-                        <h2>Saved Locations</h2>
+                        <h2>Quest Journal</h2>
                     </div>
 
                     <button id="clearButton" class="dangerMiniButton hiddenControl" type="button">
@@ -522,8 +528,8 @@
                 </div>
 
                 <div class="libraryTabs">
-                    <button class="libraryTab activeLibraryTab" data-library-view="mine" type="button">My Places</button>
-                    <button class="libraryTab" data-library-view="public" type="button">Public Quests Near Me</button>
+                    <button class="libraryTab activeLibraryTab" data-library-view="mine" type="button">Quest Journal</button>
+                    <button class="libraryTab" data-library-view="public" type="button">Nearby Adventures</button>
                     <button class="libraryTab" data-library-view="shared" type="button">Shared With Me</button>
                     <button class="libraryTab" data-library-view="users" type="button">Users</button>
                 </div>

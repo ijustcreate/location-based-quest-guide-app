@@ -82,6 +82,7 @@ window.QuestCloud = (function() {
     async function submitPublicLocation(location) {
         const supabase = getClient();
         const payload = {
+            location_client_id: location.id || "",
             location_name: location.name,
             location_hint: location.hint || "",
             location_clue: location.clue || "",
@@ -91,11 +92,12 @@ window.QuestCloud = (function() {
             location_photo_url: location.imageDataUrl && location.imageDataUrl.indexOf("data:") !== 0 ? location.imageDataUrl : null,
             glyphs: (location.glyphObjectives || []).map(function(objective) {
                 return {
-                    label: objective.label,
-                    shape: objective.shape,
-                    colorFamily: objective.colorFamily,
+                    glyphId: objective.glyphId || getGlyphId(objective.colorFamily || objective.color, objective.shape),
+                    label: objective.label || formatGlyphLabel(objective.glyphId),
+                    shape: normalizeGlyphShape(objective.shape),
+                    colorFamily: normalizeGlyphColor(objective.colorFamily || objective.color),
                     required: objective.required,
-                    points: objective.points,
+                    points: objective.rewardPoints || objective.points,
                     evidenceRequirement: objective.evidenceRequirement,
                     minConfidence: objective.minConfidence
                 };
@@ -167,15 +169,22 @@ window.QuestCloud = (function() {
             imageDataUrl: row.location_photo_url || row.icon_url || "",
             gpsSamples: [],
             glyphObjectives: (row.glyph_objectives || []).map(function(objective) {
+                const color = normalizeGlyphColor(objective.color_family);
+                const shape = normalizeGlyphShape(objective.shape);
+                const glyphId = getGlyphId(color, shape);
+
                 return {
                     id: "cloud-" + objective.id,
                     cloudId: objective.id,
-                    label: objective.label || objective.color_family + " " + objective.shape,
-                    shape: objective.shape,
-                    colorFamily: objective.color_family,
+                    glyphId: glyphId,
+                    label: objective.label || formatGlyphLabel(glyphId),
+                    shape: shape,
+                    colorFamily: color,
+                    color: color,
                     iconDataUrl: objective.icon_url || "",
                     required: objective.required !== false,
                     points: Number(objective.points || 1),
+                    rewardPoints: Number(objective.points || 1),
                     evidenceRequirement: objective.evidence_requirement || "photo",
                     minConfidence: Number(objective.min_confidence || 75),
                     status: "pending",

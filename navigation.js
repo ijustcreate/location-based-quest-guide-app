@@ -151,3 +151,27 @@ function hasArrived(distanceMeters) {
 
     return distanceMeters <= 10;
 }
+
+function getProximityLabel(distanceMeters) {
+    if (distanceMeters <= 2) {
+        return "Hidden Here";
+    }
+
+    if (distanceMeters <= 8) {
+        return "Within Reach";
+    }
+
+    if (distanceMeters <= 25) {
+        return "Close";
+    }
+
+    if (distanceMeters <= 75) {
+        return "Nearby";
+    }
+
+    if (distanceMeters <= 250) {
+        return "Signal Faint";
+    }
+
+    return "Far Signal";
+}

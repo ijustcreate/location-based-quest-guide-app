@@ -4,11 +4,11 @@ Quest Compass is a mobile-first, location-based adventure app for turning real-w
 
 It combines three core tools:
 
-- A GPS bookmark library for saving real places
+- A Quest Journal for saving real-world waypoints
 - A compass trail view for following saved places
-- A camera scanner for locking onto physical red, green, and pink hollow-triangle glyphs
+- A camera scanner for red, yellow, blue, green, and black triangle/circle/square glyphs
 
-The project is intentionally local-first and static. It runs on GitHub Pages with no backend, no paid APIs, and no build step.
+The project is intentionally local-first and static. It runs on GitHub Pages with optional Supabase cloud sync and no build step.
 
 ## Live Prototype
 
@@ -16,16 +16,16 @@ https://ijustcreate.github.io/location-based-quest-guide-app/
 
 ## Current Version
 
-Version 0.8.0 - Bug Fixes and UX Corrections
+Version 0.8.0 - Full Glyph Scanner and UX Corrections
 
-This pass fixes early GPS prompts, reset consistency, scanner/settings layering, scanner action placement, cloud-sync messaging, and compass arrow readability for the first shareable playtest.
+This pass adds canonical 15-glyph scanner support, fixes early GPS prompts, reset consistency, scanner/settings layering, scanner action placement, cloud-sync messaging, and compass arrow readability for the first shareable playtest.
 
 Current prototype systems include:
 
 - Mobile-safe layout with bottom navigation spacing
 - Safe-area-aware page padding for iPhone-style screens
 - Trail, Scan, Create, and Library tabs
-- Compact header control rail for GPS, compass, scanner, and target/library access
+- Compact header control rail for GPS, compass, scanner, and Quest Journal access
 - Centralized app state labels to avoid contradictory UI states
 - GPS permission flow and live coordinate tracking
 - No GPS prompt on initial app load; GPS is requested only after a clear location-based action
@@ -39,14 +39,15 @@ Current prototype systems include:
 - Full location editing through the Create form without replacing coordinates unless requested
 - Current GPS and pasted Google Maps coordinates can replace a location's saved coordinates
 - In-app modal dialogs instead of native browser alerts
-- Red, green, and pink hollow-triangle camera scanner prototype
+- 15-glyph scanner support: red, yellow, blue, green, and black triangles, circles, and squares
+- Canonical glyph ids such as `red_triangle`, `yellow_circle`, and `black_square`
 - Scanner states: searching, signal found, holding steady, sigil locked
 - Stable hold requirement before scanner lock
 - Scanner HUD metrics over the camera for Color, Shape, Light, Stability, and Lock
 - Basic PWA metadata and manifest for installable-app behavior
 - Landing prompt for every fresh direct/QR entry: `Have you found a glyph?`
-- Glyph objective model with color family, shape, required/optional status, points, evidence requirement, minimum confidence, and completion state
-- Location progress: `Glyphs Found: X / Y`
+- Glyph objective model with `glyphId`, color, shape, required/optional status, points, evidence requirement, minimum confidence, and completion state
+- Waypoint progress: `Glyphs Found: X / Y`
 - Correct glyph sightings record canvas photo evidence and award points
 - Wrong glyphs show mismatch and do not complete objectives
 - Felix admin account sees all locally stored locations and can export/import/reset quest data
@@ -57,12 +58,12 @@ Current prototype systems include:
 
 ## Product Vision
 
-Quest Compass turns ordinary real-world places into quest points.
+Quest Compass turns ordinary real-world places into quest waypoints.
 
 The intended loop is:
 
 1. Walk to a real-world place.
-2. Save the location.
+2. Save the waypoint.
 3. Add a name and optional clue.
 4. Follow the saved place with GPS and compass direction.
 5. Scan the assigned physical glyphs to confirm the exact discovery.
@@ -79,28 +80,30 @@ It shows:
 
 - Current trail state
 - Compass dial and target bearing
-- Active target name and hint
+- Active quest name and hint
 - Distance and GPS accuracy when GPS is active
-- Save This Place as the only Trail-specific action
+- Fantasy proximity label plus exact numeric distance
 
 GPS, compass, scanner, and target/library controls now live in the compact header rail instead of taking up space inside the Trail tab.
 
 Important state rule:
 
-The app only says `Trail Active` when GPS is active and a target is selected. Otherwise it uses states such as `Trail Idle` or `Target Locked`.
+The app only says `Trail Active` when GPS is active and a quest is selected. Otherwise it uses states such as `Trail Idle` or `Quest Locked`.
 
 ### Scan
 
 Scan is the camera-based glyph detector.
 
-It looks for hollow triangle markers using lightweight browser camera analysis:
+It looks for thick hand-drawn marker-outline glyphs using lightweight browser camera analysis:
 
 - `getUserMedia` opens the camera
 - frames are drawn to a canvas
-- red, green, and pink regions are detected
+- red, yellow, blue, green, and black outline regions are detected
+- triangle, circle, and square shapes are classified
+- exact `glyphId` matches are required for attunement
 - candidate marker boxes are scored
 - the app requires a stable hold before lock
-- the active location's glyph objectives are checked before completion
+- the active waypoint's glyph objectives are checked before completion
 
 Scanner HUD metrics:
 
@@ -121,35 +124,35 @@ Lock flow:
 
 ### Create
 
-Create saves the user's current GPS location as a quest point.
+Create saves the user's current GPS position or pasted coordinates as a quest waypoint.
 
 It supports:
 
 - Place name
 - Optional hint
-- Location / symbol photo
-- Red, green, and pink hollow-triangle objective assignment
+- Waypoint / symbol photo
+- 15-glyph picker grid for triangle, circle, and square objectives in red, yellow, blue, green, and black
 - Required or optional glyphs
 - GPS accuracy display
 - Existing location coordinate preservation while editing
-- Use Current GPS For This Location
+- Use Current GPS For This Waypoint
 - Paste Google Maps Coordinates
 - Current facing display when compass data exists
 - Save This Place
 - Save + Follow
 
-If GPS is not active, the app shows a styled `Location Needed` modal instead of a native alert.
+If GPS is not active, the app shows a styled `Waypoint Needed` modal instead of a native alert.
 
 Saved places include `facingDegrees` when the compass has a usable heading at save time.
 
 ### Library
 
-Library is the saved place notebook.
+Library is the Quest Journal.
 
 It supports:
 
-- My Places, Public Quests Near Me, Shared With Me, and Users views
-- Saved-location dropdown in the header
+- Quest Journal, Nearby Adventures, Shared With Me, and Users views
+- Saved-waypoint dropdown in the header
 - Full detail view for the selected saved place
 - Distance when GPS is active
 - Creator, glyph count, point value, and completion status
@@ -170,7 +173,7 @@ This is a static vanilla HTML/CSS/JavaScript project.
 - `styles.css` - Mobile UI, compact header controls, safe-area layout, bottom nav, cards, scanner HUD
 - `cloud.js` - Supabase browser adapter for public/shared cloud quest reads
 - `app.js` - Main app state, UI rendering, GPS, compass, tabs, modals, library behavior
-- `camera.js` - Camera startup and multi-color hollow-triangle scanner logic
+- `camera.js` - Camera startup, 15-glyph color/shape scanner logic, and live HUD overlay drawing
 - `navigation.js` - Distance, bearing, direction labels, arrow rotation, arrival detection
 - `storage.js` - Local accounts, public quest pool, glyph objectives, and saved place persistence
 - `supabase/` - Supabase CLI config and migrations for the shared quest backend
@@ -207,7 +210,17 @@ The first migration creates:
 
 It also enables Row Level Security and creates helper functions for admin checks, location/quest access, distance calculation, and nearby public locations.
 
-The static app currently reads public cloud locations into the Library tab through `cloud.js`. Public quests can be browsed without GPS; `Find Nearby Adventures` asks for GPS only when the player wants distance sorting. Local storage remains the fallback/offline path while account auth, invite acceptance, admin cloud creation, and fuller cloud write flows are built out.
+The static app currently reads public cloud waypoints into the Library tab through `cloud.js`. Public adventures can be browsed without GPS; `Find Nearby Adventures` asks for GPS only when the player wants distance sorting. Local storage remains the fallback/offline path while account auth, invite acceptance, admin cloud creation, and fuller cloud write flows are built out.
+
+The latest Supabase migration expands cloud glyph support to all 15 glyphs and adds a client waypoint id to prevent duplicate public quests when pending sync is retried.
+
+## Scanner Tuning Notes
+
+- Tentative detection starts around 70% confidence.
+- Attune requires about 85% confidence plus stable consecutive frames.
+- Strong/success detection trends above 93%.
+- Black glyphs require stronger shape confidence so shadows are less likely to be treated as black markers.
+- The detector is heuristic and optimized for thick marker outlines on light/white paper, mild rotation, and indoor lighting.
 
 ## Local Storage
 
